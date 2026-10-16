@@ -33,13 +33,14 @@ private:
     void fillInstrumentMenu (juce::ComboBox& box, int channel);
     void showProgram (int channel);
     void setKeyboardChannel (int channel);
+    void showAbout();
     void setupKnob (Knob& knob, const juce::String& paramId, const juce::String& name);
 
     GeneralMidiProcessor& processor;
 
     std::array<ChannelStrip, GeneralMidiProcessor::numChannels> strips;
     Knob volume, reverb, chorus;
-    juce::TextButton resetButton { "GM Reset" }, panicButton { "All Sound Off" };
+    juce::TextButton resetButton { "GM Reset" }, panicButton { "All Sound Off" }, aboutButton { "About" };
     juce::MidiKeyboardComponent keyboard;
     juce::Label voicesLabel;
 

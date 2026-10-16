@@ -6,6 +6,13 @@
 #include <cstdio>
 #include <cstring>
 
+#if defined (_WIN32) && defined (GM_FLUIDSYNTH_DLL)
+ #define WIN32_LEAN_AND_MEAN
+ #define NOMINMAX
+ #include <windows.h>
+ #include <string>
+#endif
+
 namespace gm
 {
 namespace
@@ -86,6 +93,35 @@ fluid_long_long_t memTell (void* handle)
     return static_cast<MemoryFile*> (handle)->pos;
 }
 
+// FluidSynth is a shared library shipped next to the plugin binary. On Windows it is
+// delay-loaded, because the system would not search the plugin's folder for it; load
+// it here by full path so the delay-load stubs bind to that copy.
+bool loadFluidSynthLibrary()
+{
+   #if defined (_WIN32) && defined (GM_FLUIDSYNTH_DLL)
+    static const bool loaded = []
+    {
+        static const int anchor = 0;
+        HMODULE self = nullptr;
+        if (! GetModuleHandleExW (GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                  reinterpret_cast<LPCWSTR> (&anchor), &self))
+            return false;
+
+        wchar_t buffer[32768];
+        const DWORD len = GetModuleFileNameW (self, buffer, (DWORD) (sizeof (buffer) / sizeof (buffer[0])));
+        if (len == 0 || len >= sizeof (buffer) / sizeof (buffer[0]))
+            return false;
+
+        std::wstring path (buffer, len);
+        path = path.substr (0, path.find_last_of (L"\\/") + 1) + GM_FLUIDSYNTH_DLL;
+        return LoadLibraryExW (path.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH) != nullptr;
+    }();
+    return loaded;
+   #else
+    return true;
+   #endif
+}
+
 void silenceFluidLogging()
 {
     fluid_set_log_function (FLUID_DBG, nullptr, nullptr);
@@ -97,9 +133,11 @@ void silenceFluidLogging()
 
 //==============================================================================
 GMSynth::GMSynth (const void* soundFontData, size_t soundFontSize)
-    : sfData (soundFontData), sfSize (soundFontSize)
+    : sfData (soundFontData), sfSize (soundFontSize),
+      libraryLoaded (loadFluidSynthLibrary())
 {
-    silenceFluidLogging();
+    if (libraryLoaded)
+        silenceFluidLogging();
 }
 
 GMSynth::~GMSynth()
@@ -117,6 +155,9 @@ void GMSynth::destroy()
 
 bool GMSynth::prepare (double sampleRate)
 {
+    if (! libraryLoaded)
+        return false;
+
     if (synth != nullptr && sampleRate == currentRate)
         return true;
 

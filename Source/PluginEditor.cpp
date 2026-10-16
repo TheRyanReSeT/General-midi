@@ -79,6 +79,9 @@ GeneralMidiEditor::GeneralMidiEditor (GeneralMidiProcessor& p)
     addAndMakeVisible (keyboard);
     setKeyboardChannel (processor.keyboardChannel.load());
 
+    aboutButton.onClick = [this] { showAbout(); };
+    addAndMakeVisible (aboutButton);
+
     voicesLabel.setJustificationType (juce::Justification::centredRight);
     voicesLabel.setFont (juce::FontOptions (12.0f));
     addAndMakeVisible (voicesLabel);
@@ -160,6 +163,27 @@ void GeneralMidiEditor::showProgram (int channel)
     }
 }
 
+void GeneralMidiEditor::showAbout()
+{
+    const juce::String text =
+        juce::String (JucePlugin_Name) + " " + JucePlugin_VersionString + "\n"
+        "by " + JucePlugin_Manufacturer + "\n\n"
+        "Sounds: GeneralUser GS by S. Christian Collins\n"
+        "https://www.schristiancollins.com/generaluser\n\n"
+        "SoundFont engine: FluidSynth, licensed under the GNU Lesser General Public "
+        "License v2.1. FluidSynth is included as a separate library that you may "
+        "replace with your own build. Source code: https://github.com/FluidSynth/fluidsynth\n\n"
+        "Built with JUCE. VST is a trademark of Steinberg Media Technologies GmbH.";
+
+    juce::AlertWindow::showAsync (juce::MessageBoxOptions()
+                                      .withIconType (juce::MessageBoxIconType::NoIcon)
+                                      .withTitle ("About")
+                                      .withMessage (text)
+                                      .withButton ("OK")
+                                      .withAssociatedComponent (this),
+                                  nullptr);
+}
+
 void GeneralMidiEditor::setKeyboardChannel (int channel)
 {
     processor.keyboardChannel = channel;
@@ -207,7 +231,7 @@ void GeneralMidiEditor::paint (juce::Graphics& g)
     auto titleArea = header.removeFromLeft (330);
     g.setColour (accent);
     g.setFont (juce::FontOptions (26.0f, juce::Font::bold));
-    g.drawText ("GENERAL MIDI SYNTH", titleArea.removeFromTop (44), juce::Justification::bottomLeft);
+    g.drawText (juce::String (JucePlugin_Name).toUpperCase(), titleArea.removeFromTop (44), juce::Justification::bottomLeft);
     g.setColour (dimText);
     g.setFont (juce::FontOptions (13.0f));
     g.drawText ("128 instruments + drum kits  |  GeneralUser GS SoundFont", titleArea.removeFromTop (22),
@@ -249,7 +273,9 @@ void GeneralMidiEditor::resized()
 
     // Keyboard and status at the bottom
     auto bottom = area.removeFromBottom (110).reduced (8, 0);
-    voicesLabel.setBounds (bottom.removeFromTop (20).reduced (4, 0));
+    auto status = bottom.removeFromTop (20);
+    aboutButton.setBounds (status.removeFromLeft (70).reduced (0, 1));
+    voicesLabel.setBounds (status.reduced (4, 0));
     keyboard.setBounds (bottom.removeFromTop (82));
 
     // 16 channel strips in two columns

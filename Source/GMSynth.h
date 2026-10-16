@@ -64,6 +64,7 @@ private:
 
     const void* sfData;
     size_t sfSize;
+    bool libraryLoaded;
 
     fluid_settings_t* settings = nullptr;
     fluid_synth_t* synth = nullptr;
