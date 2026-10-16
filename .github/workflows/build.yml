@@ -16,8 +16,8 @@ jobs:
           - name: macOS (AU, VST3, Standalone)
             os: macos-14
             artifact: GMSynth-macOS
-            extra: -G Xcode -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
-            render: ./build/Release/gm_render
+            extra: -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+            render: ./build/gm_render
           - name: Windows (VST3, Standalone)
             os: windows-latest
             artifact: GMSynth-Windows

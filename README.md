@@ -58,8 +58,8 @@ cmake --build build --config Release --parallel
 macOS (needed for the AU; this makes a universal Intel + Apple Silicon binary):
 
 ```sh
-cmake -S . -B build -G Xcode -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
-cmake --build build --config Release
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+cmake --build build --parallel
 ```
 
 Linux needs the usual JUCE packages:

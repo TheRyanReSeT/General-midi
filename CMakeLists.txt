@@ -58,6 +58,10 @@ FetchContent_Declare(fluidsynth
     EXCLUDE_FROM_ALL)
 FetchContent_MakeAvailable(fluidsynth)
 
+if(CMAKE_GENERATOR STREQUAL "Xcode")
+    target_sources(libfluidsynth PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/cmake/xcode_placeholder.c")
+endif()
+
 if(APPLE)
     # Let each bundle find its own copy in Contents/Frameworks.
     set_target_properties(libfluidsynth PROPERTIES
