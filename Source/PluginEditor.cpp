@@ -230,11 +230,11 @@ void GeneralMidiEditor::paint (juce::Graphics& g)
 
     auto titleArea = header.removeFromLeft (330);
     g.setColour (accent);
-    g.setFont (juce::FontOptions (26.0f, juce::Font::bold));
-    g.drawText (juce::String (JucePlugin_Name).toUpperCase(), titleArea.removeFromTop (44), juce::Justification::bottomLeft);
+    g.setFont (juce::FontOptions (30.0f, juce::Font::bold));
+    g.drawText (JucePlugin_Name, titleArea.removeFromTop (44), juce::Justification::bottomLeft);
     g.setColour (dimText);
     g.setFont (juce::FontOptions (13.0f));
-    g.drawText ("128 instruments + drum kits  |  GeneralUser GS SoundFont", titleArea.removeFromTop (22),
+    g.drawText ("by " JucePlugin_Manufacturer "  |  128 GM instruments + drum kits", titleArea.removeFromTop (22),
                 juce::Justification::topLeft);
     g.drawText ("Click a channel number to play it from the keyboard", titleArea.removeFromTop (18),
                 juce::Justification::topLeft);

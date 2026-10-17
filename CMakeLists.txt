@@ -7,12 +7,12 @@ project(GMSynth VERSION 1.0.0 LANGUAGES C CXX)
 #   - Manufacturer code: 4 characters, at least one upper-case letter, unique to you.
 #   - Plugin code: 4 characters, unique among your products, at least one upper-case letter.
 # Changing either code after release makes hosts treat it as a different plugin.
-set(GM_PRODUCT_NAME      "GM Synth"                 CACHE STRING "Plugin name shown in hosts")
-set(GM_COMPANY_NAME      "Your Company"             CACHE STRING "Manufacturer name shown in hosts")
-set(GM_COMPANY_WEBSITE   "https://example.com"      CACHE STRING "Manufacturer website")
-set(GM_BUNDLE_ID         "com.yourcompany.gmsynth"  CACHE STRING "Reverse-DNS bundle identifier")
-set(GM_MANUFACTURER_CODE "Ycmp"                     CACHE STRING "4-character manufacturer code")
-set(GM_PLUGIN_CODE       "Gms1"                     CACHE STRING "4-character plugin code")
+set(GM_PRODUCT_NAME      "gemi"                     CACHE STRING "Plugin name shown in hosts")
+set(GM_COMPANY_NAME      "Opalite Audio"            CACHE STRING "Manufacturer name shown in hosts")
+set(GM_COMPANY_WEBSITE   ""                         CACHE STRING "Manufacturer website")
+set(GM_BUNDLE_ID         "com.opaliteaudio.gemi"    CACHE STRING "Reverse-DNS bundle identifier")
+set(GM_MANUFACTURER_CODE "Opal"                     CACHE STRING "4-character manufacturer code")
+set(GM_PLUGIN_CODE       "Gemi"                     CACHE STRING "4-character plugin code")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -25,7 +25,7 @@ endif()
 include(FetchContent)
 
 #==============================================================================
-# JUCE (plugin framework: VST3 / AU / Standalone)
+# JUCE (plugin framework: VST3 / AU)
 FetchContent_Declare(JUCE
     GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
     GIT_TAG        9.0.4
@@ -139,7 +139,7 @@ endif()
 
 #==============================================================================
 # The plugin
-set(GM_FORMATS VST3 Standalone)
+set(GM_FORMATS VST3)
 if(APPLE)
     list(APPEND GM_FORMATS AU)
 endif()

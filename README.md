@@ -1,14 +1,14 @@
-# GM Synth
+# gemi by Opalite Audio
 
-A VST3 / AU / Standalone instrument with the complete General MIDI sound set built in.
+A VST3 / AU instrument with the complete General MIDI sound set built in.
 No SoundFont files to find, install or point at: the samples are compiled into the plugin.
 
 Every one of the classic 128 GM instruments is there, from Acoustic Grand Piano to
 Seashore, Helicopter, Applause and Gunshot, plus 13 drum kits (Standard, Room, Power,
 Electronic, 808/909, Jazz, Brush, Orchestral, SFX and more) and 146 GS variation tones.
 
-"GM Synth" and "Your Company" are placeholders: set your own brand in `CMakeLists.txt`
-(see [Before you sell it](#before-you-sell-it)).
+The product name, company, bundle ID and plugin codes are set at the top of
+`CMakeLists.txt` (see [Before you sell it](#before-you-sell-it)).
 
 ![screenshot](docs/screenshot.png)
 
@@ -28,7 +28,7 @@ Electronic, 808/909, Jazz, Brush, Orchestral, SFX and more) and 146 GS variation
 
 | Piece | What it is | License |
 | --- | --- | --- |
-| [JUCE 9](https://juce.com) | Plugin framework (VST3, AU, Standalone) | AGPLv3 or JUCE commercial licence |
+| [JUCE 9](https://juce.com) | Plugin framework (VST3, AU) | AGPLv3 or JUCE commercial licence |
 | VST3 SDK (bundled with JUCE) | VST3 plugin interface | MIT |
 | [FluidSynth 2.5.7](https://www.fluidsynth.org) | The SoundFont engine: the reference SF2 player, with reverb, chorus and full modulator support | LGPL-2.1 |
 | [GeneralUser GS 2.0.3](https://www.schristiancollins.com/generaluser) by S. Christian Collins | The 32 MB GM/GS sound bank, embedded in the plugin binary | Free for commercial use, may be bundled in software |
@@ -73,16 +73,14 @@ The first build takes a few minutes, mostly compiling the 32 MB SoundFont into t
 
 Built plugins land in `build/GMSynth_artefacts/Release/` (with the default name):
 
-- `VST3/GM Synth.vst3`: copy to `~/Library/Audio/Plug-Ins/VST3` (macOS),
+- `VST3/gemi.vst3`: copy to `~/Library/Audio/Plug-Ins/VST3` (macOS),
   `C:\Program Files\Common Files\VST3` (Windows) or `~/.vst3` (Linux)
-- `AU/GM Synth.component` (macOS): copy to `~/Library/Audio/Plug-Ins/Components`
-- `Standalone/`: a standalone app that takes MIDI from any connected controller or
-  virtual port. Keep the FluidSynth library and `Licenses` folder next to it.
+- `AU/gemi.component` (macOS): copy to `~/Library/Audio/Plug-Ins/Components`
 
 Each plugin is a self-contained bundle (about 39 MB), FluidSynth library included.
 
-The GitHub Actions workflow (`.github/workflows/build.yml`) builds macOS, Windows and
-Linux on every push, runs the engine test, and uploads the plugins as artifacts.
+The GitHub Actions workflow (`.github/workflows/build.yml`) builds the macOS AU and VST3
+on every push, runs the engine test, and uploads the plugins as an artifact.
 
 ## Testing the engine
 
@@ -100,9 +98,9 @@ clipping or produces NaNs.
 This is not legal advice; read each license yourself, and talk to a lawyer if the
 product matters to you.
 
-1. **Your brand.** In `CMakeLists.txt` set `GM_PRODUCT_NAME`, `GM_COMPANY_NAME`,
-   `GM_COMPANY_WEBSITE`, `GM_BUNDLE_ID` and pick your own `GM_MANUFACTURER_CODE` and
-   `GM_PLUGIN_CODE` (4 characters each, at least one upper-case letter). Never change the
+1. **Your brand.** Set in `CMakeLists.txt`: product `gemi`, company `Opalite Audio`,
+   bundle ID `com.opaliteaudio.gemi`, manufacturer code `Opal`, plugin code `Gemi`.
+   Add your website to `GM_COMPANY_WEBSITE` when you have one. Never change the two
    codes after release, or hosts will treat updates as a different plugin. Don't use other
    companies' trademarks in the name (for example Roland, Sound Canvas, or the General MIDI
    logo); describing it as "General MIDI compatible" is the usual approach.

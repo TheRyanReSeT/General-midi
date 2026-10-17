@@ -1,8 +1,8 @@
 # Third-party notices
 
 This product includes the following third-party components. Full license texts are in
-the `Licenses` folder, which the build copies into every plugin bundle and next to the
-standalone app. Ship that folder with every copy you distribute.
+the `Licenses` folder, which the build copies into every plugin bundle.
+Ship that folder with every copy you distribute.
 
 ## GeneralUser GS 2.0.3
 
@@ -24,8 +24,8 @@ separate shared library inside the plugin:
 | Platform | Location |
 | --- | --- |
 | macOS | `<plugin bundle>/Contents/Frameworks/libfluidsynth.3.dylib` |
-| Windows | `<plugin>.vst3/Contents/x86_64-win/libfluidsynth-3.dll`, next to the standalone `.exe` |
-| Linux | `<plugin>.vst3/Contents/x86_64-linux/libfluidsynth.so.3`, next to the standalone binary |
+| Windows | `<plugin>.vst3/Contents/x86_64-win/libfluidsynth-3.dll` |
+| Linux | `<plugin>.vst3/Contents/x86_64-linux/libfluidsynth.so.3` |
 
 You may replace that library with your own build of FluidSynth 2.5.x (with
 `osal=cpp11`). The complete corresponding source code is available at

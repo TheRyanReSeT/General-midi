@@ -6,60 +6,29 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
-    name: ${{ matrix.name }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: macOS (AU, VST3, Standalone)
-            os: macos-14
-            artifact: GMSynth-macOS
-            extra: -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
-            render: ./build/gm_render
-          - name: Windows (VST3, Standalone)
-            os: windows-latest
-            artifact: GMSynth-Windows
-            extra: ""
-            render: ./build/Release/gm_render.exe
-          - name: Linux (VST3, Standalone)
-            os: ubuntu-24.04
-            artifact: GMSynth-Linux
-            extra: ""
-            render: ./build/gm_render
+  macos:
+    name: macOS (AU, VST3)
+    runs-on: macos-14
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Linux dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libasound2-dev libx11-dev libxrandr-dev libxinerama-dev \
-            libxcursor-dev libxext-dev libxi-dev libxcomposite-dev libxrender-dev \
-            libfreetype-dev libfontconfig1-dev
-
       - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release ${{ matrix.extra }}
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
 
       - name: Build
-        run: cmake --build build --config Release --parallel 4
+        run: cmake --build build --parallel 4
 
       - name: Test engine (render every instrument and drum kit)
-        run: ${{ matrix.render }} build/gm_tour.wav
+        run: ./build/gm_render build/gm_tour.wav
 
       - name: Collect plugins
-        shell: bash
         run: |
           mkdir dist
+          cp -R "build/GMSynth_artefacts/Release/AU" dist/
           cp -R "build/GMSynth_artefacts/Release/VST3" dist/
-          cp -R "build/GMSynth_artefacts/Release/Standalone" dist/
-          if [ -d "build/GMSynth_artefacts/Release/AU" ]; then
-            cp -R "build/GMSynth_artefacts/Release/AU" dist/
-          fi
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
+          name: gemi-macOS
           path: dist
