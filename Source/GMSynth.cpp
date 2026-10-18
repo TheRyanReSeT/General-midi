@@ -290,10 +290,10 @@ void GMSynth::handleMidi (const uint8_t* data, int size)
 
     switch (status & 0xF0)
     {
-        case 0x80: fluid_synth_noteoff (synth, channel, d1); break;
+        case 0x80: noteOff (channel, d1); break;
         case 0x90:
-            if (d2 == 0) fluid_synth_noteoff (synth, channel, d1);
-            else         fluid_synth_noteon (synth, channel, d1, d2);
+            if (d2 == 0) noteOff (channel, d1);
+            else         noteOn (channel, d1, d2);
             break;
         case 0xA0: fluid_synth_key_pressure (synth, channel, d1, d2); break;
         case 0xB0: fluid_synth_cc (synth, channel, d1, d2); break;
@@ -348,6 +348,98 @@ void GMSynth::resetToGM()
     if (synth == nullptr) return;
     static const char gmOn[] = { 0x7E, 0x7F, 0x09, 0x01 };
     fluid_synth_sysex (synth, gmOn, sizeof (gmOn), nullptr, nullptr, nullptr, 0);
+}
+
+//==============================================================================
+void GMSynth::noteOn (int channel, int key, int velocity)
+{
+    if (synth == nullptr) return;
+    fluid_synth_noteon (synth, channel, key, velocity);
+    if (shapes[channel].enabled)
+        applyShape (channel, key, true);
+}
+
+void GMSynth::noteOff (int channel, int key)                    { if (synth != nullptr) fluid_synth_noteoff (synth, channel, key); }
+void GMSynth::controlChange (int channel, int cc, int value)    { if (synth != nullptr) fluid_synth_cc (synth, channel, cc, value); }
+void GMSynth::pitchBend (int channel, int value14)              { if (synth != nullptr) fluid_synth_pitch_bend (synth, channel, value14); }
+void GMSynth::channelPressure (int channel, int value)          { if (synth != nullptr) fluid_synth_channel_pressure (synth, channel, value); }
+void GMSynth::keyPressure (int channel, int key, int value)     { if (synth != nullptr) fluid_synth_key_pressure (synth, channel, key, value); }
+
+void GMSynth::setVoiceShape (int channel, const VoiceShape& shape)
+{
+    if (channel < 0 || channel >= numChannels || shapes[channel] == shape)
+        return;
+    shapes[channel] = shape;
+    if (synth != nullptr && shape.enabled)
+        applyShape (channel, -1, false);
+}
+
+// Sets the shape's generators on the channel's voices: every sounding voice, or (right after a
+// note-on) only the voices that note just started, which share the newest voice ID.
+void GMSynth::applyShape (int channel, int key, bool newestOnly)
+{
+    constexpr int maxVoices = 256;
+    fluid_voice_t* voices[maxVoices + 1] = {};
+    fluid_synth_get_voicelist (synth, voices, maxVoices, -1);
+
+    unsigned int newest = 0;
+    if (newestOnly)
+        for (int i = 0; voices[i] != nullptr; ++i)
+            if (fluid_voice_get_channel (voices[i]) == channel && fluid_voice_get_key (voices[i]) == key)
+                newest = std::max (newest, fluid_voice_get_id (voices[i]));
+
+    const auto& s = shapes[channel];
+    const struct { int gen; float value; } gens[] = {
+        { GEN_FILTERFC, s.filterCents }, { GEN_FILTERQ, s.filterQ },
+        { GEN_VOLENVDELAY, -12000.0f }, { GEN_VOLENVHOLD, -12000.0f },
+        { GEN_KEYTOVOLENVHOLD, 0.0f }, { GEN_KEYTOVOLENVDECAY, 0.0f },
+        { GEN_VOLENVATTACK, s.attack }, { GEN_VOLENVDECAY, s.decay },
+        { GEN_VOLENVSUSTAIN, s.sustain }, { GEN_VOLENVRELEASE, s.release } };
+
+    for (int i = 0; voices[i] != nullptr; ++i)
+    {
+        fluid_voice_t* v = voices[i];
+        if (fluid_voice_get_channel (v) != channel)
+            continue;
+        if (newestOnly && (fluid_voice_get_key (v) != key || fluid_voice_get_id (v) != newest))
+            continue;
+        for (const auto& g : gens)
+        {
+            fluid_voice_gen_set (v, g.gen, g.value);
+            fluid_voice_update_param (v, g.gen);
+        }
+    }
+}
+
+void GMSynth::setFineTune (int channel, float cents)
+{
+    if (synth != nullptr) fluid_synth_set_gen (synth, channel, GEN_FINETUNE, cents);
+}
+
+void GMSynth::setPortamento (int channel, int milliseconds)
+{
+    if (synth == nullptr) return;
+    milliseconds = std::clamp (milliseconds, 0, 16383);
+    fluid_synth_set_portamento_mode (synth, channel, FLUID_CHANNEL_PORTAMENTO_MODE_EACH_NOTE);
+    // Sending the LSB switches FluidSynth to a linear time in milliseconds (MSB * 128 + LSB).
+    fluid_synth_cc (synth, channel, 5, milliseconds >> 7);
+    fluid_synth_cc (synth, channel, 37, milliseconds & 127);
+    fluid_synth_cc (synth, channel, 65, milliseconds > 0 ? 127 : 0);
+}
+
+void GMSynth::setMonoChannels (int count)
+{
+    if (synth == nullptr) return;
+    fluid_synth_reset_basic_channel (synth, -1);
+    if (count <= 0)
+    {
+        fluid_synth_set_basic_channel (synth, 0, FLUID_CHANNEL_MODE_OMNION_POLY, 0);
+        return;
+    }
+    fluid_synth_set_basic_channel (synth, 0, FLUID_CHANNEL_MODE_OMNIOFF_MONO, count);
+    fluid_synth_set_basic_channel (synth, count, FLUID_CHANNEL_MODE_OMNION_POLY, 0);
+    for (int ch = 0; ch < count; ++ch)
+        fluid_synth_set_legato_mode (synth, ch, FLUID_CHANNEL_LEGATO_MODE_MULTI_RETRIGGER);
 }
 
 int GMSynth::getActiveVoiceCount() const

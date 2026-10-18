@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -12,6 +13,28 @@ typedef struct _fluid_synth_t fluid_synth_t;
 
 namespace gm
 {
+
+// Overrides a channel's filter and volume envelope on every voice it plays, so a synth layer's
+// controls set absolute values instead of offsets from whatever each SoundFont preset specifies.
+struct VoiceShape
+{
+    bool enabled = false;
+    float filterCents = 13500.0f;   // absolute cutoff in cents (13500 = fully open)
+    float filterQ = 0.0f;           // resonance in centibels
+    float attack = -12000.0f;       // envelope times in timecents
+    float decay = -12000.0f;
+    float sustain = 0.0f;           // sustain attenuation in centibels (0 = full level)
+    float release = -12000.0f;
+
+    // Exact (bitwise) comparison: used to skip re-applying an unchanged shape.
+    bool operator== (const VoiceShape& o) const
+    {
+        auto same = [] (float x, float y) { return std::memcmp (&x, &y, sizeof (float)) == 0; };
+        return enabled == o.enabled && same (filterCents, o.filterCents) && same (filterQ, o.filterQ) && same (attack, o.attack)
+            && same (decay, o.decay) && same (sustain, o.sustain) && same (release, o.release);
+    }
+    bool operator!= (const VoiceShape& o) const { return ! (*this == o); }
+};
 
 struct PresetInfo
 {
@@ -46,6 +69,21 @@ public:
     void allSoundsOff();
     void resetToGM();
 
+    void noteOn (int channel, int key, int velocity);
+    void noteOff (int channel, int key);
+    void controlChange (int channel, int controller, int value);
+    void pitchBend (int channel, int value14);
+    void channelPressure (int channel, int value);
+    void keyPressure (int channel, int key, int value);
+
+    // Applies to voices already sounding as well as new ones.
+    void setVoiceShape (int channel, const VoiceShape& shape);
+    void setFineTune (int channel, float cents);
+    // Glide time in milliseconds, 0 = off.
+    void setPortamento (int channel, int milliseconds);
+    // The first `count` channels play one note at a time (legato); 0 makes every channel polyphonic.
+    void setMonoChannels (int count);
+
     bool getProgram (int channel, int& bank, int& program) const;
     int getActiveVoiceCount() const;
 
@@ -61,6 +99,7 @@ public:
 private:
     void destroy();
     void applyMixSettings();
+    void applyShape (int channel, int key, bool newestOnly);
 
     const void* sfData;
     size_t sfSize;
@@ -72,6 +111,7 @@ private:
     double currentRate = 0.0;
 
     float gain = 1.0f, reverbLevel = 0.7f, chorusLevel = 0.5f;
+    VoiceShape shapes[numChannels];
     std::vector<PresetInfo> presets;
 };
 

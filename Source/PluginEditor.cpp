@@ -1,299 +1,289 @@
 #include "PluginEditor.h"
-#include "GMNames.h"
+
+#include <GemiUI.h>
 
 namespace
 {
-const juce::Colour background  { 0xff1b1d22 };
-const juce::Colour panel       { 0xff262a31 };
-const juce::Colour lcd         { 0xff10140f };
-const juce::Colour lcdText     { 0xffb6f09c };
-const juce::Colour accent      { 0xffffb347 };
-const juce::Colour dimText     { 0xff8a919c };
+const juce::Identifier eventId ("gemi");
 
-constexpr int stripHeight = 30;
-constexpr int stripGap = 4;
+juce::String mimeTypeFor (const juce::String& fileName)
+{
+    const auto ext = fileName.fromLastOccurrenceOf (".", false, false).toLowerCase();
+    if (ext == "html")  return "text/html";
+    if (ext == "js")    return "text/javascript";
+    if (ext == "css")   return "text/css";
+    if (ext == "jpg")   return "image/jpeg";
+    if (ext == "png")   return "image/png";
+    if (ext == "webp")  return "image/webp";
+    if (ext == "woff2") return "font/woff2";
+    return "application/octet-stream";
+}
 }
 
-GeneralMidiEditor::GeneralMidiEditor (GeneralMidiProcessor& p)
-    : AudioProcessorEditor (&p),
+GemiEditor::GemiEditor (GemiProcessor& p)
+    : AudioProcessorEditor (p),
       processor (p),
-      keyboard (p.keyboardState, juce::MidiKeyboardComponent::horizontalKeyboard)
+      browser (juce::WebBrowserComponent::Options {}
+                   .withNativeIntegrationEnabled()
+                   .withKeepPageLoadedWhenBrowserIsHidden()
+                   .withResourceProvider ([] (const juce::String& url) { return getResource (url); })
+                   .withEventListener (eventId, [this] (const juce::var& message) { handleMessage (message); }))
 {
-    lookAndFeel.setColour (juce::ComboBox::backgroundColourId, lcd);
-    lookAndFeel.setColour (juce::ComboBox::textColourId, lcdText);
-    lookAndFeel.setColour (juce::ComboBox::outlineColourId, panel.brighter (0.15f));
-    lookAndFeel.setColour (juce::ComboBox::arrowColourId, lcdText.withAlpha (0.7f));
-    lookAndFeel.setColour (juce::PopupMenu::backgroundColourId, lcd);
-    lookAndFeel.setColour (juce::PopupMenu::textColourId, lcdText);
-    lookAndFeel.setColour (juce::PopupMenu::headerTextColourId, accent);
-    lookAndFeel.setColour (juce::PopupMenu::highlightedBackgroundColourId, lcdText.withAlpha (0.25f));
-    lookAndFeel.setColour (juce::PopupMenu::highlightedTextColourId, juce::Colours::white);
-    lookAndFeel.setColour (juce::TextButton::buttonColourId, panel.brighter (0.1f));
-    lookAndFeel.setColour (juce::TextButton::buttonOnColourId, accent);
-    lookAndFeel.setColour (juce::TextButton::textColourOffId, dimText.brighter (0.4f));
-    lookAndFeel.setColour (juce::TextButton::textColourOnId, juce::Colours::black);
-    lookAndFeel.setColour (juce::Slider::rotarySliderFillColourId, accent);
-    lookAndFeel.setColour (juce::Slider::thumbColourId, accent.brighter (0.3f));
-    lookAndFeel.setColour (juce::Slider::textBoxTextColourId, dimText.brighter (0.5f));
-    lookAndFeel.setColour (juce::Label::textColourId, dimText.brighter (0.5f));
-    setLookAndFeel (&lookAndFeel);
+    addAndMakeVisible (browser);
 
-    for (int ch = 0; ch < GeneralMidiProcessor::numChannels; ++ch)
+    currentSize = juce::jlimit (0.75, 1.5, (double) processor.getUiState()["size"]);
+    setSize (juce::roundToInt (baseWidth * currentSize), juce::roundToInt (baseHeight * currentSize));
+
+    // A combo was loaded or saved, or the host restored a session (possibly off the message thread).
+    processor.onPresetsChanged = [safe = juce::Component::SafePointer<GemiEditor> (this)]
     {
-        auto& s = strips[(size_t) ch];
-
-        s.number.setButtonText (juce::String (ch + 1));
-        s.number.setClickingTogglesState (false);
-        s.number.setTooltip ("Play this channel from the on-screen keyboard");
-        s.number.onClick = [this, ch] { setKeyboardChannel (ch + 1); };
-        addAndMakeVisible (s.number);
-
-        fillInstrumentMenu (s.instrument, ch);
-        s.instrument.onChange = [this, ch]
+        juce::MessageManager::callAsync ([safe]
         {
-            const int id = strips[(size_t) ch].instrument.getSelectedId();
-            if (id > 0)
-            {
-                const int code = id - 1;
-                processor.requestProgram (ch, GeneralMidiProcessor::bankOf (code), GeneralMidiProcessor::programOf (code));
-            }
-        };
-        addAndMakeVisible (s.instrument);
-        showProgram (ch);
-    }
+            if (safe == nullptr || ! safe->pageReady) return;
+            safe->sendPresets();
+            safe->sendAllParams();
+            safe->sendState();
+        });
+    };
 
-    setupKnob (volume, "volume", "Volume");
-    setupKnob (reverb, "reverb", "Reverb");
-    setupKnob (chorus, "chorus", "Chorus");
-
-    resetButton.setTooltip ("Send a General MIDI reset: every channel back to its default instrument and controllers");
-    resetButton.onClick = [this] { processor.requestGMReset(); };
-    addAndMakeVisible (resetButton);
-
-    panicButton.setTooltip ("Silence all notes immediately");
-    panicButton.onClick = [this] { processor.requestPanic(); };
-    addAndMakeVisible (panicButton);
-
-    keyboard.setAvailableRange (21, 108);
-    keyboard.setLowestVisibleKey (36);
-    addAndMakeVisible (keyboard);
-    setKeyboardChannel (processor.keyboardChannel.load());
-
-    aboutButton.onClick = [this] { showAbout(); };
-    addAndMakeVisible (aboutButton);
-
-    voicesLabel.setJustificationType (juce::Justification::centredRight);
-    voicesLabel.setFont (juce::FontOptions (12.0f));
-    addAndMakeVisible (voicesLabel);
-
-    setSize (820, 520);
+    browser.goToURL (juce::WebBrowserComponent::getResourceProviderRoot());
     startTimerHz (30);
 }
 
-GeneralMidiEditor::~GeneralMidiEditor()
+GemiEditor::~GemiEditor()
 {
-    setLookAndFeel (nullptr);
+    processor.onPresetsChanged = nullptr;
+    for (const auto& id : gestures)
+        if (auto* param = processor.parameters.getParameter (id))
+            param->endChangeGesture();
 }
 
-void GeneralMidiEditor::setupKnob (Knob& knob, const juce::String& paramId, const juce::String& name)
+void GemiEditor::paint (juce::Graphics& g)
 {
-    knob.slider.setColour (juce::Slider::textBoxOutlineColourId, panel);
-    knob.slider.setColour (juce::Slider::textBoxBackgroundColourId, panel);
-    knob.slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 70, 16);
-    addAndMakeVisible (knob.slider);
-    knob.attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.parameters, paramId, knob.slider);
-
-    knob.label.setText (name, juce::dontSendNotification);
-    knob.label.setJustificationType (juce::Justification::centred);
-    knob.label.setFont (juce::FontOptions (13.0f, juce::Font::bold));
-    addAndMakeVisible (knob.label);
+    g.fillAll (juce::Colour (0xff241d62));
 }
 
-void GeneralMidiEditor::fillInstrumentMenu (juce::ComboBox& box, int channel)
+void GemiEditor::resized()
 {
-    const auto& presets = processor.getPresets();
+    browser.setBounds (getLocalBounds());
+}
 
-    if (channel == gm::GMSynth::drumChannel)
+void GemiEditor::applySize (double size)
+{
+    size = juce::jlimit (0.75, 1.5, size);
+    if (std::abs (size - currentSize) < 0.001) return;
+    currentSize = size;
+    setSize (juce::roundToInt (baseWidth * size), juce::roundToInt (baseHeight * size));
+}
+
+//==============================================================================
+// Pages and pictures come from the plugin binary: "/" is index.html, everything else is looked up by file name.
+std::optional<juce::WebBrowserComponent::Resource> GemiEditor::getResource (const juce::String& url)
+{
+    auto path = url.upToFirstOccurrenceOf ("?", false, false);
+    auto name = path == "/" || path.isEmpty() ? juce::String ("index.html") : path.fromLastOccurrenceOf ("/", false, false);
+
+    for (int i = 0; i < GemiUI::namedResourceListSize; ++i)
     {
-        box.addSectionHeading ("Drum Kits");
-        for (const auto& p : presets)
-            if (p.bank == gm::GMSynth::drumBank)
-                box.addItem (juce::String (p.program + 1).paddedLeft ('0', 3) + "  " + p.name,
-                             GeneralMidiProcessor::encodeProgram (p.bank, p.program) + 1);
-        return;
+        if (name != GemiUI::originalFilenames[i]) continue;
+        int size = 0;
+        if (const auto* data = GemiUI::getNamedResource (GemiUI::namedResourceList[i], size))
+        {
+            const auto* bytes = reinterpret_cast<const std::byte*> (data);
+            return juce::WebBrowserComponent::Resource { std::vector<std::byte> (bytes, bytes + size), mimeTypeFor (name) };
+        }
     }
+    return std::nullopt;
+}
 
-    // The 128 GM instruments by family, each followed by the SoundFont's GS variations.
-    for (int program = 0; program < 128; ++program)
+void GemiEditor::send (const juce::String& type, juce::DynamicObject* payload)
+{
+    juce::var message (payload != nullptr ? payload : new juce::DynamicObject());
+    message.getDynamicObject()->setProperty ("type", type);
+    browser.emitEventIfBrowserIsVisible (eventId, message);
+}
+
+void GemiEditor::sendState()
+{
+    auto* o = new juce::DynamicObject();
+    o->setProperty ("state", processor.getUiState());
+    send ("state", o);
+}
+
+void GemiEditor::addPresetList (juce::DynamicObject& o) const
+{
+    juce::Array<juce::var> list;
+    for (const auto& entry : processor.presets.all())
     {
-        if (program % 8 == 0)
-            box.addSectionHeading (gm::familyName (program));
+        auto* e = new juce::DynamicObject();
+        e->setProperty ("name", entry.name);
+        e->setProperty ("kind", entry.factory ? "factory" : "user");
+        list.add (juce::var (e));
+    }
+    o.setProperty ("presets", list);
+    o.setProperty ("presetIndex", processor.getPresetIndex());
+    o.setProperty ("presetName", processor.getPresetName());
+}
 
-        const auto number = juce::String (program + 1).paddedLeft ('0', 3);
-        box.addItem (number + "  " + gm::programName (program), GeneralMidiProcessor::encodeProgram (0, program) + 1);
+void GemiEditor::sendPresets()
+{
+    auto* o = new juce::DynamicObject();
+    addPresetList (*o);
+    send ("presets", o);
+}
 
-        for (const auto& p : presets)
-            if (p.program == program && p.bank > 0 && p.bank < gm::GMSynth::drumBank)
-                box.addItem ("        " + number + "." + juce::String (p.bank) + "  " + p.name,
-                             GeneralMidiProcessor::encodeProgram (p.bank, p.program) + 1);
+void GemiEditor::sendAllParams()
+{
+    auto* values = new juce::DynamicObject();
+    for (const auto& spec : gemi::paramSpecs())
+    {
+        const float v = processor.parameters.getRawParameterValue (spec.id)->load();
+        values->setProperty (spec.id, v);
+        lastSent[spec.id] = v;
+    }
+    auto* o = new juce::DynamicObject();
+    o->setProperty ("values", juce::var (values));
+    send ("params", o);
+}
+
+void GemiEditor::sendInit()
+{
+    auto* values = new juce::DynamicObject();
+    for (const auto& spec : gemi::paramSpecs())
+    {
+        const float v = processor.parameters.getRawParameterValue (spec.id)->load();
+        values->setProperty (spec.id, v);
+        lastSent[spec.id] = v;
+    }
+    auto* o = new juce::DynamicObject();
+    o->setProperty ("params", juce::var (values));
+    o->setProperty ("state", processor.getUiState());
+    o->setProperty ("version", GEMI_DISPLAY_VERSION);
+    addPresetList (*o);
+    send ("init", o);
+    pageReady = true;
+}
+
+//==============================================================================
+void GemiEditor::handleMessage (const juce::var& m)
+{
+    const auto type = m["type"].toString();
+
+    if (type == "ready")
+    {
+        sendInit();
+    }
+    else if (type == "params")
+    {
+        if (auto* values = m["values"].getDynamicObject())
+        {
+            for (const auto& prop : values->getProperties())
+            {
+                const auto id = prop.name.toString();
+                auto* param = processor.parameters.getParameter (id);
+                if (param == nullptr) continue;
+                const float v = (float) prop.value;
+                lastSent[id] = v;
+                const bool inGesture = gestures.count (id) > 0;
+                if (! inGesture) param->beginChangeGesture();
+                param->setValueNotifyingHost (param->convertTo0to1 (v));
+                if (! inGesture) param->endChangeGesture();
+            }
+        }
+    }
+    else if (type == "gesture")
+    {
+        const bool on = (bool) m["on"];
+        if (auto* ids = m["ids"].getArray())
+        {
+            for (const auto& idVar : *ids)
+            {
+                const auto id = idVar.toString();
+                auto* param = processor.parameters.getParameter (id);
+                if (param == nullptr) continue;
+                if (on && gestures.insert (id).second) param->beginChangeGesture();
+                if (! on && gestures.erase (id) > 0) param->endChangeGesture();
+            }
+        }
+    }
+    else if (type == "state")
+    {
+        processor.setUiState (m["state"]);
+        applySize ((double) m["state"]["size"]);
+    }
+    else if (type == "note")
+    {
+        processor.queueUiNote ((int) m["note"], (int) m.getProperty ("velocity", 100), (bool) m["on"]);
+    }
+    else if (type == "preset")
+    {
+        if (m.hasProperty ("step")) processor.stepPreset ((int) m["step"]);
+        else                        processor.loadPreset ((int) m["index"]);
+    }
+    else if (type == "savePreset")
+    {
+        processor.savePreset (m["name"].toString());
+    }
+    else if (type == "gmReset")
+    {
+        processor.requestGMReset();
+    }
+    else if (type == "panic")
+    {
+        processor.requestPanic();
     }
 }
 
-void GeneralMidiEditor::showProgram (int channel)
+// 30 times a second: parameter changes from the host (automation, generic editors), notes for the
+// keyboard, channel activity lights and the voice count.
+void GemiEditor::timerCallback()
 {
-    auto& box = strips[(size_t) channel].instrument;
-    const int code = processor.getChannelProgram (channel);
-    const int id = code + 1;
+    if (! pageReady) return;
 
-    if (box.getSelectedId() == id)
-        return;
-
-    if (box.indexOfItemId (id) >= 0)
+    auto* changed = new juce::DynamicObject();
+    bool any = false;
+    for (const auto& spec : gemi::paramSpecs())
     {
-        box.setSelectedId (id, juce::dontSendNotification);
+        const float v = processor.parameters.getRawParameterValue (spec.id)->load();
+        auto it = lastSent.find (spec.id);
+        if (it == lastSent.end() || std::abs (it->second - v) > 1.0e-6f)
+        {
+            lastSent[spec.id] = v;
+            changed->setProperty (spec.id, v);
+            any = true;
+        }
+    }
+    if (any)
+    {
+        auto* o = new juce::DynamicObject();
+        o->setProperty ("values", juce::var (changed));
+        send ("params", o);
     }
     else
     {
-        // e.g. a drum kit selected on a melodic channel via SysEx
-        const int bank = GeneralMidiProcessor::bankOf (code), program = GeneralMidiProcessor::programOf (code);
-        const auto name = processor.getPresetName (bank, program);
-        box.setText (juce::String (program + 1).paddedLeft ('0', 3) + "  "
-                         + (name.empty() ? juce::String ("(bank " + juce::String (bank) + ")") : juce::String (name)),
-                     juce::dontSendNotification);
-    }
-}
-
-void GeneralMidiEditor::showAbout()
-{
-    const juce::String text =
-        juce::String (JucePlugin_Name) + " " + JucePlugin_VersionString + "\n"
-        "by " + JucePlugin_Manufacturer + "\n\n"
-        "Sounds: GeneralUser GS by S. Christian Collins\n"
-        "https://www.schristiancollins.com/generaluser\n\n"
-        "SoundFont engine: FluidSynth, licensed under the GNU Lesser General Public "
-        "License v2.1. FluidSynth is included as a separate library that you may "
-        "replace with your own build. Source code: https://github.com/FluidSynth/fluidsynth\n\n"
-        "Built with JUCE. VST is a trademark of Steinberg Media Technologies GmbH.";
-
-    juce::AlertWindow::showAsync (juce::MessageBoxOptions()
-                                      .withIconType (juce::MessageBoxIconType::NoIcon)
-                                      .withTitle ("About")
-                                      .withMessage (text)
-                                      .withButton ("OK")
-                                      .withAssociatedComponent (this),
-                                  nullptr);
-}
-
-void GeneralMidiEditor::setKeyboardChannel (int channel)
-{
-    processor.keyboardChannel = channel;
-    keyboard.setMidiChannel (channel);
-
-    for (int ch = 0; ch < GeneralMidiProcessor::numChannels; ++ch)
-        strips[(size_t) ch].number.setToggleState (ch + 1 == channel, juce::dontSendNotification);
-}
-
-void GeneralMidiEditor::timerCallback()
-{
-    for (int ch = 0; ch < GeneralMidiProcessor::numChannels; ++ch)
-    {
-        auto& s = strips[(size_t) ch];
-        showProgram (ch);
-
-        const auto counter = processor.getChannelActivity (ch);
-        if (counter != s.lastCounter)
-        {
-            s.lastCounter = counter;
-            s.activity = 1.0f;
-            repaint (s.ledBounds);
-        }
-        else if (s.activity > 0.0f)
-        {
-            s.activity = juce::jmax (0.0f, s.activity - 0.08f);
-            repaint (s.ledBounds);
-        }
+        delete changed;
     }
 
-    voicesLabel.setText (processor.isSoundFontLoaded()
-                             ? "Voices: " + juce::String (processor.getActiveVoices())
-                             : "SoundFont failed to load",
-                         juce::dontSendNotification);
-}
+    if (processor.takeProgramsChanged())
+        sendState();
 
-void GeneralMidiEditor::paint (juce::Graphics& g)
-{
-    g.fillAll (background);
+    juce::Array<int> held;
+    processor.getHeldNotes (held);
+    juce::String heldKey;
+    for (int n : held) heldKey << n << ',';
+    const auto active = processor.getActiveChannels();
+    const int voices = processor.getActiveVoices();
 
-    auto header = getLocalBounds().removeFromTop (110).reduced (16, 12);
-    g.setColour (panel);
-    g.fillRoundedRectangle (getLocalBounds().removeFromTop (110).reduced (8, 6).toFloat(), 8.0f);
-
-    auto titleArea = header.removeFromLeft (330);
-    g.setColour (accent);
-    g.setFont (juce::FontOptions (30.0f, juce::Font::bold));
-    g.drawText (JucePlugin_Name, titleArea.removeFromTop (44), juce::Justification::bottomLeft);
-    g.setColour (dimText);
-    g.setFont (juce::FontOptions (13.0f));
-    g.drawText ("by " JucePlugin_Manufacturer "  |  128 GM instruments + drum kits", titleArea.removeFromTop (22),
-                juce::Justification::topLeft);
-    g.drawText ("Click a channel number to play it from the keyboard", titleArea.removeFromTop (18),
-                juce::Justification::topLeft);
-
-    for (const auto& s : strips)
+    if (heldKey != lastHeld || active != lastActive || voices != lastVoices)
     {
-        const auto led = s.ledBounds.toFloat();
-        g.setColour (lcd);
-        g.fillEllipse (led);
-        g.setColour (lcdText.withAlpha (0.15f + 0.85f * s.activity));
-        g.fillEllipse (led.reduced (2.0f));
-    }
-}
-
-void GeneralMidiEditor::resized()
-{
-    auto area = getLocalBounds();
-
-    // Header: title (painted), knobs, buttons
-    auto header = area.removeFromTop (110).reduced (16, 12);
-    header.removeFromLeft (330);
-
-    auto buttons = header.removeFromRight (120);
-    buttons.removeFromTop (14);
-    resetButton.setBounds (buttons.removeFromTop (28));
-    buttons.removeFromTop (8);
-    panicButton.setBounds (buttons.removeFromTop (28));
-
-    header.removeFromRight (10);
-    for (auto* knob : { &chorus, &reverb, &volume })
-    {
-        auto k = header.removeFromRight (90);
-        knob->label.setBounds (k.removeFromTop (16));
-        knob->slider.setBounds (k);
-    }
-
-    // Keyboard and status at the bottom
-    auto bottom = area.removeFromBottom (110).reduced (8, 0);
-    auto status = bottom.removeFromTop (20);
-    aboutButton.setBounds (status.removeFromLeft (70).reduced (0, 1));
-    voicesLabel.setBounds (status.reduced (4, 0));
-    keyboard.setBounds (bottom.removeFromTop (82));
-
-    // 16 channel strips in two columns
-    area = area.reduced (12, 10);
-    const int columnWidth = (area.getWidth() - 16) / 2;
-
-    for (int ch = 0; ch < GeneralMidiProcessor::numChannels; ++ch)
-    {
-        const int column = ch / 8, row = ch % 8;
-        juce::Rectangle<int> r (area.getX() + column * (columnWidth + 16),
-                                area.getY() + row * (stripHeight + stripGap),
-                                columnWidth, stripHeight);
-
-        auto& s = strips[(size_t) ch];
-        s.ledBounds = r.removeFromLeft (14).withSizeKeepingCentre (12, 12);
-        r.removeFromLeft (6);
-        s.number.setBounds (r.removeFromLeft (38));
-        r.removeFromLeft (6);
-        s.instrument.setBounds (r);
+        lastHeld = heldKey; lastActive = active; lastVoices = voices;
+        auto* o = new juce::DynamicObject();
+        juce::Array<juce::var> notes, act;
+        for (int n : held) notes.add (n);
+        for (int ch = 0; ch < GemiProcessor::numChannels; ++ch) act.add ((active & (1u << ch)) != 0);
+        o->setProperty ("held", notes);
+        o->setProperty ("act", act);
+        o->setProperty ("voices", voices);
+        send ("tick", o);
     }
 }

@@ -34,6 +34,13 @@ publisher of this product for at least three years from the date of purchase.
 
 FluidSynth uses gcem (Apache License 2.0, `Licenses/gcem-Apache-2.0.txt`) at build time.
 
+## Gaegu and Nunito fonts
+
+The title font, Gaegu (Copyright 2018 The Gaegu Project Authors), and the interface font,
+Nunito (Copyright 2014 The Nunito Project Authors), embedded in the plugin with their character
+sets reduced to Latin. SIL Open Font License 1.1 (`Licenses/OFL-Gaegu.txt`,
+`Licenses/OFL-Nunito.txt`).
+
 ## VST3 SDK
 
 Copyright Steinberg Media Technologies GmbH. MIT License (`Licenses/VST3-SDK-MIT.txt`).

@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(GMSynth VERSION 1.0.0 LANGUAGES C CXX)
+# Hosts see the numeric version; gemi shows it as 0.<minor>a (0.1.0 -> "0.1a").
+project(GMSynth VERSION 0.1.0 LANGUAGES C CXX)
+set(GEMI_DISPLAY_VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}a")
 
 #==============================================================================
 # Product identity. Set these to your own brand before you ship.
@@ -121,6 +123,18 @@ juce_add_binary_data(GMSoundFontData
     SOURCES Resources/GeneralUser-GS.sf2)
 
 #==============================================================================
+# The window: UI/index.html with its paintings and fonts, compiled into the plugin binary and served
+# to the web view by the editor.
+file(GLOB GEMI_UI_FILES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/UI/index.html"
+    "${CMAKE_CURRENT_SOURCE_DIR}/UI/img/*"
+    "${CMAKE_CURRENT_SOURCE_DIR}/UI/fonts/*")
+juce_add_binary_data(GemiUIData
+    NAMESPACE GemiUI
+    HEADER_NAME GemiUI.h
+    SOURCES ${GEMI_UI_FILES})
+
+#==============================================================================
 # Engine: FluidSynth wrapper with no JUCE dependency (also used by the test renderer).
 add_library(gm_engine STATIC
     Source/GMSynth.cpp
@@ -157,19 +171,24 @@ juce_add_plugin(GMSynth
     NEEDS_MIDI_OUTPUT FALSE
     IS_MIDI_EFFECT FALSE
     EDITOR_WANTS_KEYBOARD_FOCUS FALSE
+    NEEDS_WEB_BROWSER TRUE
     COPY_PLUGIN_AFTER_BUILD FALSE
     VST3_CATEGORIES Instrument Synth
     AU_MAIN_TYPE kAudioUnitType_MusicDevice)
 
 target_sources(GMSynth PRIVATE
+    Source/Parameters.h
+    Source/Presets.cpp
+    Source/Presets.h
     Source/PluginProcessor.cpp
     Source/PluginProcessor.h
     Source/PluginEditor.cpp
     Source/PluginEditor.h)
 
 target_compile_definitions(GMSynth PUBLIC
-    JUCE_WEB_BROWSER=0
+    JUCE_WEB_BROWSER=1
     JUCE_USE_CURL=0
+    GEMI_DISPLAY_VERSION="${GEMI_DISPLAY_VERSION}"
     JUCE_VST3_CAN_REPLACE_VST2=0
     JUCE_DISPLAY_SPLASH_SCREEN=0)
 
@@ -177,6 +196,8 @@ target_link_libraries(GMSynth
     PRIVATE
         gm_engine
         GMSoundFontData
+        GemiUIData
+        juce::juce_gui_extra
         juce::juce_audio_utils
         juce::juce_audio_processors
     PUBLIC
@@ -206,4 +227,11 @@ if(GM_BUILD_TOOLS)
         target_link_options(gm_render PRIVATE "/DELAYLOAD:$<TARGET_FILE_NAME:libfluidsynth>")
         target_link_libraries(gm_render PRIVATE delayimp)
     endif()
+
+    # Self-test: drives the real processor offline (synth layers, GM Player, combos, saved state).
+    add_executable(gemi_selftest tools/gemi_selftest.cpp)
+    target_include_directories(gemi_selftest PRIVATE $<TARGET_PROPERTY:GMSynth,INCLUDE_DIRECTORIES>)
+    target_compile_definitions(gemi_selftest PRIVATE $<TARGET_PROPERTY:GMSynth,COMPILE_DEFINITIONS>)
+    target_link_libraries(gemi_selftest PRIVATE GMSynth)
+    gm_bundle_fluidsynth(gemi_selftest)
 endif()

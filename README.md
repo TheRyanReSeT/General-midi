@@ -14,15 +14,35 @@ The product name, company, bundle ID and plugin codes are set at the top of
 
 ## What it does
 
-- **16 MIDI channels**, multitimbral, channel 10 is drums, exactly like a hardware GM module.
-  Drop it on a track, feed it a `.mid` file, and it plays back like a 90s sound card.
-- **Program change, bank select (GS variations), pitch bend, mod wheel, volume, pan,
-  expression, sustain, reverb/chorus send (CC91/CC93), RPNs and GM/GS SysEx resets** all work.
-- **Reverb and chorus** built in, with master Reverb / Chorus / Volume knobs.
-- **Per-channel instrument picker** in the UI, so you can choose sounds without sending
-  program changes. The choices are saved with your project.
-- **On-screen keyboard**: click a channel number to play that channel.
-- **GM Reset**, **All Sound Off** and an **About** box with the license credits.
+gemi opens in **Synth** mode; the switch in the header flips to **GM Player**.
+
+**Synth**
+
+- **Three layers**, each any of the 128 GM sounds, played together from one key. MIDI on any
+  channel plays them.
+- Per layer: on/off, **level, pan, cutoff, resonance**, an **ADSR envelope** (drag the points or
+  the A/D/S/R pills), and **octave, semitone and fine** tuning. The filter and envelope replace each
+  sound's own, so the values shown are the values you hear.
+- Global **reverb, chorus, vibrato** (the mod wheel adds to it), **glide** and **volume**, and
+  **Poly / Mono**.
+- **Combos**: ten factory combos, plus your own. Save writes them to
+  `~/Library/Audio/Presets/Opalite Audio/gemi` (macOS).
+- Every knob, switch and stepper is a host parameter: automatable, and saved with the project.
+  Knobs snap to a notch at their default; double-click resets, Shift-drag skips the notch,
+  Cmd/Ctrl-drag is fine control.
+
+**GM Player**
+
+- **16 MIDI channels**, multitimbral, channel 10 is drums, like a hardware GM module. Route a
+  `.mid` file's parts to their channels in your DAW and pick each channel's sound (or let the
+  song's program changes pick it). Instruments are colour coded by GM family.
+- Per-channel **mute and solo**, activity lights, **Follow keyboard** (a controller on channel 1
+  plays the selected channel), **GM Reset** and **All Sound Off**. Drum kits on channel 10.
+- Program change, bank select (GS variations), pitch bend, mod wheel, volume, pan, expression,
+  sustain, reverb/chorus sends (CC91/CC93), RPNs and GM/GS SysEx resets all work.
+
+**Everywhere**: a playable on-screen keyboard that also lights up with incoming notes; light
+(Cloud Meadow) and dark (Starfield Dusk) themes; window sizes 75 to 150 %; Reduce motion; About.
 
 ## How it works
 
@@ -37,12 +57,23 @@ FluidSynth is built without glib or audio drivers, as a **shared library shipped
 each plugin bundle**. Linking it dynamically is what lets you sell the plugin as closed
 source while meeting the LGPL. The SoundFont is fed to it straight from memory.
 
+The window is a web page (`UI/index.html`, with its paintings in `UI/img` and fonts in `UI/fonts`)
+compiled into the plugin and shown in the system web view (WebKit on macOS). It talks to the
+plugin through JUCE's web view events; see the bridge at the end of the page and
+`Source/PluginEditor.cpp`. Open `UI/index.html` in a browser to see it without the plugin.
+
 Source layout:
 
-- `Source/GMSynth.*`: the sound module (FluidSynth + embedded SoundFont, MIDI handling). No JUCE dependency.
-- `Source/PluginProcessor.*`: the plugin: sample-accurate MIDI, parameters, state saving.
-- `Source/PluginEditor.*`: the UI.
+- `Source/GMSynth.*`: the sound module (FluidSynth + embedded SoundFont, MIDI handling, per-voice
+  filter and envelope overrides). No JUCE dependency.
+- `Source/Parameters.h`: parameter IDs, defaults and the knob-to-sound formulas.
+- `Source/PluginProcessor.*`: Synth layers and GM Player routing, combos, state saving.
+- `Source/Presets.*`: factory combos and saved combos.
+- `Source/PluginEditor.*`: hosts the web view and the bridge to the page.
+- `UI/`: the window.
 - `tools/gm_render.cpp`: renders a tour of all 128 instruments and every drum kit to a WAV and checks levels.
+- `tools/gemi_selftest.cpp`: drives the real processor offline and checks synth layers, GM Player,
+  combos and saved state.
 - `Licenses/`, `THIRD_PARTY_NOTICES.md`: copied into every bundle by the build.
 
 ## Building
@@ -66,7 +97,8 @@ Linux needs the usual JUCE packages:
 
 ```sh
 sudo apt install libasound2-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev \
-  libxext-dev libxi-dev libxcomposite-dev libxrender-dev libfreetype-dev libfontconfig1-dev
+  libxext-dev libxi-dev libxcomposite-dev libxrender-dev libfreetype-dev libfontconfig1-dev \
+  libwebkit2gtk-4.1-dev libgtk-3-dev
 ```
 
 The first build takes a few minutes, mostly compiling the 32 MB SoundFont into the binary.
@@ -80,7 +112,7 @@ Built plugins land in `build/GMSynth_artefacts/Release/` (with the default name)
 Each plugin is a self-contained bundle (about 39 MB), FluidSynth library included.
 
 The GitHub Actions workflow (`.github/workflows/build.yml`) builds the macOS AU and VST3
-on every push, runs the engine test, and uploads the plugins as an artifact.
+on every push, runs the engine tests, and uploads the plugins as an artifact.
 
 ## Testing the engine
 
@@ -92,6 +124,11 @@ cmake --build build --target gm_render
 
 It prints the peak and RMS level of each instrument and exits non-zero if any is silent,
 clipping or produces NaNs.
+
+```sh
+cmake --build build --target gemi_selftest
+./build/gemi_selftest played.wav         # plugin behaviour checks; writes what it played
+```
 
 ## Before you sell it
 

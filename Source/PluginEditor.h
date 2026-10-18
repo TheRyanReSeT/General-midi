@@ -1,50 +1,48 @@
 #pragma once
 
+#include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_gui_extra/juce_gui_extra.h>
+
 #include "PluginProcessor.h"
 
-class GeneralMidiEditor : public juce::AudioProcessorEditor,
-                          private juce::Timer
+#include <set>
+
+// gemi's window: the painted UI in UI/index.html, shown in a web view and served from the plugin
+// binary. The page and the plugin talk through "gemi" events (see the bridge at the end of the page).
+class GemiEditor : public juce::AudioProcessorEditor, private juce::Timer
 {
 public:
-    explicit GeneralMidiEditor (GeneralMidiProcessor&);
-    ~GeneralMidiEditor() override;
+    static constexpr int baseWidth = 960, baseHeight = 640;
+
+    explicit GemiEditor (GemiProcessor&);
+    ~GemiEditor() override;
 
     void paint (juce::Graphics&) override;
     void resized() override;
 
 private:
-    struct ChannelStrip
-    {
-        juce::TextButton number;   // click to play this channel from the on-screen keyboard
-        juce::ComboBox instrument;
-        float activity = 0.0f;
-        uint32_t lastCounter = 0;
-        juce::Rectangle<int> ledBounds;
-    };
-
-    struct Knob
-    {
-        juce::Slider slider { juce::Slider::RotaryHorizontalVerticalDrag, juce::Slider::TextBoxBelow };
-        juce::Label label;
-        std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;
-    };
-
     void timerCallback() override;
-    void fillInstrumentMenu (juce::ComboBox& box, int channel);
-    void showProgram (int channel);
-    void setKeyboardChannel (int channel);
-    void showAbout();
-    void setupKnob (Knob& knob, const juce::String& paramId, const juce::String& name);
+    void handleMessage (const juce::var& message);
+    void send (const juce::String& type, juce::DynamicObject* payload);
+    void sendInit();
+    void sendPresets();
+    void sendState();
+    void addPresetList (juce::DynamicObject&) const;
+    void sendAllParams();
+    void applySize (double size);
 
-    GeneralMidiProcessor& processor;
+    static std::optional<juce::WebBrowserComponent::Resource> getResource (const juce::String& url);
 
-    std::array<ChannelStrip, GeneralMidiProcessor::numChannels> strips;
-    Knob volume, reverb, chorus;
-    juce::TextButton resetButton { "GM Reset" }, panicButton { "All Sound Off" }, aboutButton { "About" };
-    juce::MidiKeyboardComponent keyboard;
-    juce::Label voicesLabel;
+    GemiProcessor& processor;
+    juce::WebBrowserComponent browser;
+    bool pageReady = false;
+    double currentSize = 1.0;
 
-    juce::LookAndFeel_V4 lookAndFeel;
+    std::map<juce::String, float> lastSent;   // parameter values the page already has
+    std::set<juce::String> gestures;          // parameters the page is dragging
+    juce::String lastHeld;
+    uint32_t lastActive = 0xffffffff;
+    int lastVoices = -1;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (GeneralMidiEditor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (GemiEditor)
 };
