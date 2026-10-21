@@ -173,7 +173,10 @@ bool GMSynth::prepare (double sampleRate)
     settings = new_fluid_settings();
     fluid_settings_setnum (settings, "synth.sample-rate", sampleRate);
     fluid_settings_setint (settings, "synth.polyphony", 256);
-    fluid_settings_setint (settings, "synth.midi-channels", numChannels);
+    fluid_settings_setint (settings, "synth.midi-channels", totalChannels);
+    fluid_settings_setint (settings, "synth.audio-groups", numGroups);
+    fluid_settings_setint (settings, "synth.audio-channels", numGroups);
+    fluid_settings_setint (settings, "synth.effects-groups", numGroups);
     fluid_settings_setint (settings, "synth.cpu-cores", 1);
     fluid_settings_setint (settings, "synth.reverb.active", 1);
     fluid_settings_setint (settings, "synth.chorus.active", 1);
@@ -216,6 +219,7 @@ bool GMSynth::prepare (double sampleRate)
         }
     }
 
+    fxPointers.assign ((size_t) numGroups * 4, nullptr);
     applyMixSettings();
 
     for (int ch = 0; ch < numChannels; ++ch)
@@ -231,8 +235,26 @@ void GMSynth::applyMixSettings()
         return;
 
     fluid_synth_set_gain (synth, baseGain * gain);
-    fluid_synth_set_reverb_group_level (synth, -1, reverbLevel);
-    fluid_synth_set_chorus_group_level (synth, -1, chorusLevel * 4.0);
+    applyReverb();
+    applyChorus();
+}
+
+// The Reverb knob grows the room as well as the level, so low settings stay close and high ones open up.
+void GMSynth::applyReverb()
+{
+    fluid_synth_set_reverb_group_roomsize (synth, -1, 0.25 + 0.65 * reverbLevel);
+    fluid_synth_set_reverb_group_damp (synth, -1, 0.3);
+    fluid_synth_set_reverb_group_width (synth, -1, 1.0);
+    fluid_synth_set_reverb_group_level (synth, -1, std::min (1.0, reverbLevel * 1.3));
+}
+
+// The Chorus knob deepens the sweep as well as raising the level.
+void GMSynth::applyChorus()
+{
+    fluid_synth_set_chorus_group_nr (synth, -1, 3);
+    fluid_synth_set_chorus_group_speed (synth, -1, 0.4);
+    fluid_synth_set_chorus_group_depth (synth, -1, 4.0 + 14.0 * chorusLevel);
+    fluid_synth_set_chorus_group_level (synth, -1, chorusLevel * 6.0);
 }
 
 void GMSynth::setGain (float linearGain)
@@ -246,14 +268,14 @@ void GMSynth::setReverbLevel (float level)
 {
     if (level == reverbLevel) return;
     reverbLevel = level;
-    if (synth != nullptr) fluid_synth_set_reverb_group_level (synth, -1, reverbLevel);
+    if (synth != nullptr) applyReverb();
 }
 
 void GMSynth::setChorusLevel (float level)
 {
     if (level == chorusLevel) return;
     chorusLevel = level;
-    if (synth != nullptr) fluid_synth_set_chorus_group_level (synth, -1, chorusLevel * 4.0);
+    if (synth != nullptr) applyChorus();
 }
 
 //==============================================================================
@@ -313,12 +335,38 @@ void GMSynth::render (float* left, float* right, int numSamples)
         return;
     }
 
-    fluid_synth_write_float (synth, numSamples, left, 0, 1, right, 0, 1);
+    std::fill (left, left + numSamples, 0.0f);
+    std::fill (right, right + numSamples, 0.0f);
+    float* l[numGroups];
+    float* r[numGroups];
+    std::fill (l, l + numGroups, left);
+    std::fill (r, r + numGroups, right);
+    renderGroups (l, r, numSamples);
+}
+
+void GMSynth::renderGroups (float* const* left, float* const* right, int numSamples)
+{
+    if (synth == nullptr || numSamples <= 0)
+        return;
+
+    float* out[numGroups * 2];
+    for (int g = 0; g < numGroups; ++g)
+    {
+        out[g * 2] = left[g];
+        out[g * 2 + 1] = right[g];
+        // Each group's reverb and chorus return to the same output as its dry sound.
+        for (int k = 0; k < 2; ++k)
+        {
+            fxPointers[(size_t) (g * 4 + k * 2)] = left[g];
+            fxPointers[(size_t) (g * 4 + k * 2 + 1)] = right[g];
+        }
+    }
+    fluid_synth_process (synth, numSamples, numGroups * 4, fxPointers.data(), numGroups * 2, out);
 }
 
 void GMSynth::selectProgram (int channel, int bank, int program)
 {
-    if (synth == nullptr || channel < 0 || channel >= numChannels)
+    if (synth == nullptr || channel < 0 || channel >= totalChannels)
         return;
 
     if (channel != drumChannel)
@@ -339,8 +387,7 @@ bool GMSynth::getProgram (int channel, int& bank, int& program) const
 void GMSynth::allSoundsOff()
 {
     if (synth == nullptr) return;
-    for (int ch = 0; ch < numChannels; ++ch)
-        fluid_synth_all_sounds_off (synth, ch);
+    fluid_synth_all_sounds_off (synth, -1);
 }
 
 void GMSynth::resetToGM()
@@ -367,7 +414,7 @@ void GMSynth::keyPressure (int channel, int key, int value)     { if (synth != n
 
 void GMSynth::setVoiceShape (int channel, const VoiceShape& shape)
 {
-    if (channel < 0 || channel >= numChannels || shapes[channel] == shape)
+    if (channel < 0 || channel >= totalChannels || shapes[channel] == shape)
         return;
     shapes[channel] = shape;
     if (synth != nullptr && shape.enabled)
@@ -409,6 +456,33 @@ void GMSynth::applyShape (int channel, int key, bool newestOnly)
             fluid_voice_update_param (v, g.gen);
         }
     }
+}
+
+void GMSynth::setFilter (int channel, float cents, float q)
+{
+    if (channel < 0 || channel >= totalChannels) return;
+    auto& s = shapes[channel];
+    if (s.filterCents == cents && s.filterQ == q) return;
+    s.filterCents = cents;
+    s.filterQ = q;
+    if (synth == nullptr || ! s.enabled) return;
+
+    constexpr int maxVoices = 256;
+    fluid_voice_t* voices[maxVoices + 1] = {};
+    fluid_synth_get_voicelist (synth, voices, maxVoices, -1);
+    for (int i = 0; voices[i] != nullptr; ++i)
+    {
+        if (fluid_voice_get_channel (voices[i]) != channel) continue;
+        fluid_voice_gen_set (voices[i], GEN_FILTERFC, cents);
+        fluid_voice_update_param (voices[i], GEN_FILTERFC);
+        fluid_voice_gen_set (voices[i], GEN_FILTERQ, q);
+        fluid_voice_update_param (voices[i], GEN_FILTERQ);
+    }
+}
+
+void GMSynth::setPitchBendRange (int channel, int semitones)
+{
+    if (synth != nullptr) fluid_synth_pitch_wheel_sens (synth, channel, semitones);
 }
 
 void GMSynth::setFineTune (int channel, float cents)

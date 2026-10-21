@@ -11,12 +11,16 @@
 
 // gemi: every General MIDI sound, played two ways.
 //  - Synth mode: incoming MIDI on any channel plays up to three layers, each a GM sound on its own
-//    FluidSynth channel (0..2) with its own level, pan, tuning, filter and envelope.
+//    FluidSynth channel (0..2) with its own level, pan, tuning, filter and envelope. With MPE on,
+//    channel 1 is the master channel and each of channels 2..16 gets its own copy of the layers
+//    (engine channels 16..60), so every note bends, presses and slides on its own.
 //  - GM Player mode: the 16 MIDI channels pass straight through, one GM sound per channel, drums on 10.
+//    Each channel can also play on its own stereo output ("Ch 1".."Ch 16") when the host enables it.
 class GemiProcessor : public juce::AudioProcessor
 {
 public:
     static constexpr int numChannels = gm::GMSynth::numChannels;
+    static constexpr int numSlots = 16;   // per layer: slot 0 is the plain layer, slots 1..15 are MPE channels 2..16
     enum class Mode { synth = 0, gmPlayer = 1 };
 
     GemiProcessor();
@@ -77,6 +81,7 @@ public:
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameters();
+    static BusesProperties makeBuses();
     juce::var currentPresetData() const;
     void applyPresetData (const juce::var& data);
 
@@ -93,6 +98,8 @@ private:
     std::atomic<float>* glideParam = nullptr;
     std::atomic<float>* volumeParam = nullptr;
     std::atomic<float>* monoParam = nullptr;
+    std::atomic<float>* layersParam = nullptr;
+    std::atomic<float>* mpeParam = nullptr;
 
     // Audio thread.
     void enterMode (Mode m);
@@ -102,6 +109,12 @@ private:
     void synthNoteOn (int source, int note, int velocity);
     void synthNoteOff (int source, int note);
     void releaseLayer (int layer);
+    static int engineChannel (int layer, int slot) { return slot == 0 ? layer : 16 + (slot - 1) * gemi::numLayers + layer; }
+    bool layerActive (int layer) const { return applied[(size_t) layer].on && layer < appliedLayers; }
+    void setMpe (bool on);
+    void updateBend (int slot);
+    void updateExpression (int slot);
+    void renderSpan (juce::AudioBuffer<float>& buffer, int start, int count);
     void trackHeld (int note, bool on);
     bool channelAudible (int channel) const;
 
@@ -115,7 +128,15 @@ private:
         int fine = 1000; gm::VoiceShape shape;
     };
     std::array<AppliedLayer, gemi::numLayers> applied {};
-    int appliedVibrato = -1, appliedGlide = -1, appliedMono = -1, incomingMod = 0;
+    int appliedVibrato = -1, appliedGlide = -1, appliedMono = -1, appliedMpe = -1, appliedLayers = 1, incomingMod = 0;
+
+    // MPE expression per slot (index 1..15), all -1..1 or 0..1.
+    float masterBend = 0.0f;
+    std::array<float, numSlots> memberBend {}, memberPressure {}, memberSlide {};
+
+    // Each output group rendered separately, then mixed to the main output or its own bus.
+    std::vector<float> scratch;
+    int scratchSize = 0;
     std::array<int, numChannels> appliedGmProgram {};
     int appliedKit = -1;
     uint32_t appliedMute = 0, appliedSolo = 0;
@@ -123,6 +144,7 @@ private:
     // Which note each layer is playing for a held key: [source][key][layer], -1 = none.
     // Sources 0..15 are MIDI channels, 16 is the on-screen keyboard.
     int8_t layerNote[numChannels + 1][128][gemi::numLayers];
+    int8_t noteSlot[numChannels + 1][128];   // the slot a held key plays on
     std::array<int, numChannels> channelNotes {};   // GM Player: notes held per channel
     std::array<uint8_t, 128> heldCount {};
 

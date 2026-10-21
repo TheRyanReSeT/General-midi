@@ -28,7 +28,8 @@ struct ParamSpec
 
 inline juce::String layerId (int layer, const char* suffix) { return "l" + juce::String (layer + 1) + "_" + suffix; }
 
-// The UI's "Aurora Choir" combo: each layer's defaults.
+// A fresh layer: gemi starts with layer 1 (a grand piano); layers 2 and 3 start like this when added.
+// These match LAYER_DEFAULTS in UI/index.html, and the envelopes match its suggestions for each sound.
 struct LayerDefaults
 {
     float level, pan, cutoff, reso, attack, decay, sustain, release;
@@ -39,9 +40,9 @@ struct LayerDefaults
 inline const LayerDefaults& layerDefaults (int layer)
 {
     static const LayerDefaults d[numLayers] = {
-        { 0.80f, 0.40f, 0.72f, 0.20f, 0.20f, 0.15f, 0.80f, 0.40f, 0, 0, 0, 53 },
-        { 0.60f, 0.60f, 0.55f, 0.35f, 0.55f, 0.40f, 0.65f, 0.80f, 0, 7, 6, 95 },
-        { 0.45f, 0.50f, 0.90f, 0.10f, 0.00f, 0.70f, 0.00f, 0.30f, 1, 0, -4, 9 } };
+        { 0.80f, 0.50f, 0.90f, 0.10f, 0.00f, 0.90f, 0.25f, 0.15f, 0, 0, 0, 1 },     // Acoustic Grand Piano
+        { 0.70f, 0.50f, 0.90f, 0.10f, 0.12f, 0.30f, 0.90f, 0.20f, 0, 0, 0, 49 },    // String Ensemble 1
+        { 0.60f, 0.50f, 0.85f, 0.10f, 0.35f, 0.50f, 0.85f, 0.50f, 0, 0, 0, 90 } };  // Pad 2 (warm)
     return d[layer];
 }
 
@@ -75,12 +76,14 @@ inline const std::vector<ParamSpec>& paramSpecs()
             add ("semi", "Semitones", Kind::stepper, (float) d.semi, -12, 12);
             add ("fine", "Fine", Kind::stepper, (float) d.fine, -50, 50);
         }
-        v.push_back ({ "reverb", "Reverb", Kind::knob, 0.70f });
-        v.push_back ({ "chorus", "Chorus", Kind::knob, 0.35f });
-        v.push_back ({ "vibrato", "Vibrato", Kind::knob, 0.15f });
+        v.push_back ({ "reverb", "Reverb", Kind::knob, 0.45f });
+        v.push_back ({ "chorus", "Chorus", Kind::knob, 0.20f });
+        v.push_back ({ "vibrato", "Vibrato", Kind::knob, 0.0f });
         v.push_back ({ "glide", "Glide", Kind::knob, 0.0f });
         v.push_back ({ "volume", "Volume", Kind::knob, 0.80f });
         v.push_back ({ "mono", "Mono", Kind::toggle, 0.0f });
+        v.push_back ({ "layers", "Layers", Kind::stepper, 1.0f, 1, numLayers });
+        v.push_back ({ "mpe", "MPE", Kind::toggle, 0.0f });
         return v;
     }();
     return specs;

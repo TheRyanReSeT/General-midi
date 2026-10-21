@@ -179,6 +179,10 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
 .plug button { font: inherit; }
 .plug .clip { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 [data-drag] { touch-action: none; cursor: ns-resize; }
+.plusorb { transition: transform 0.18s ease; }
+.plug [data-act="layer-add"]:active { transform: none; }
+[data-act="layer-add"]:hover .plusorb { transform: scale(1.07); }
+[data-act="layer-add"]:active .plusorb { transform: scale(0.96); }
 </style>
 
 </head>
@@ -214,12 +218,11 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
   var s = {};   /* flattened view of st for the current mode, rebuilt on every render */
 
   var ui = {
-    tab: 'plugin', view: 'synth', layerOn: [true, true, true], ch: 1, follow: true, mono: false, gmTip: true, mute: {}, solo: {}, gmProg: [1, 34, 49, 26, 57, 74, 5, 82, 89, 0, 12, 66, 53, 123, 128, 99], kit: 1, layerProg: [53, 95, 9], picker: null,
-    held: [], localHeld: [], keyCol: {}, chActive: [], voices: 0, version: '0.1a', presets: [], presetIdx: 0, presetName: 'Aurora Choir', combos: false,
-    vals: {}, sw: {}, steps: { oct: 0, semi: 7, fine: 6 }, tw: {}, pops: {}, menu: false, about: false, size: 1, tipSpec: null,
+    tab: 'plugin', view: 'synth', layerOn: [true, true, true], ch: 1, follow: true, mono: false, gmTip: true, mute: {}, solo: {}, gmProg: [1, 34, 49, 26, 57, 74, 5, 82, 89, 0, 12, 66, 53, 123, 128, 99], kit: 1, layerProg: [1, 49, 90], layers: 1, picker: null, pickMode: 'family',
+    held: [], localHeld: [], chActive: [], voices: 0, version: '0.2a', presets: [], presetIdx: 0, presetName: 'Grand Piano', combos: false,
+    vals: {}, sw: {}, steps: {}, tw: {}, pops: {}, menu: false, about: false, size: 1, tipSpec: null, tour: null, tourSeen: false,
     env: { a: 0.35, d: 0.45, s: 0.65, r: 0.55 },
-    layerEnv: [{ a: 0.2, d: 0.15, s: 0.8, r: 0.4 }, { a: 0.55, d: 0.4, s: 0.65, r: 0.8 }, { a: 0.0, d: 0.7, s: 0.0, r: 0.3 }],
-    keys: [12, 16, 19]
+    layerEnv: [{ a: 0, d: 0.9, s: 0.25, r: 0.15 }, { a: 0.12, d: 0.3, s: 0.9, r: 0.2 }, { a: 0.35, d: 0.5, s: 0.85, r: 0.5 }]
   };
 
   /* ---------- colour helpers ---------- */
@@ -253,6 +256,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
     'Tinkle Bell', 'Agogo', 'Steel Drums', 'Woodblock', 'Taiko Drum', 'Melodic Tom', 'Synth Drum', 'Reverse Cymbal',
     'Guitar Fret Noise', 'Breath Noise', 'Seashore', 'Bird Tweet', 'Telephone Ring', 'Helicopter', 'Applause', 'Gunshot'];
   var GM_FAMILIES = ['Piano', 'Chromatic Perc.', 'Organ', 'Guitar', 'Bass', 'Strings', 'Ensemble', 'Brass', 'Reed', 'Pipe', 'Synth Lead', 'Synth Pad', 'Synth Effects', 'Ethnic', 'Percussive', 'Sound Effects'];
+  var GM_TAGS = ['Piano', 'Chrom. Perc.', 'Organ', 'Guitar', 'Bass', 'Strings', 'Ensemble', 'Brass', 'Reed', 'Pipe', 'Lead', 'Pad', 'Synth FX', 'Ethnic', 'Percussive', 'SFX'];   /* short names for the jump tags */
   var GM_KITS = [[1, 'Standard Kit'], [9, 'Room Kit'], [17, 'Power Kit'], [25, 'Electronic Kit'], [26, 'TR-808 Kit'], [33, 'Jazz Kit'], [41, 'Brush Kit'], [49, 'Orchestra Kit'], [57, 'SFX Kit']];
   function famOf(prog) { return Math.floor((prog - 1) / 8); }
   function pad3(n) { return ('00' + n).slice(-3); }
@@ -263,6 +267,38 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
     var h = (345 + f * 22.5) % 360;
     return { fill: hslHex(h, t.dark ? 85 : 70, t.dark ? 74 : 68), text: t.dark ? hslHex(h, 85, 78) : hslHex(h, 55, 38) };
   }
+
+  /* A suggested envelope for every General MIDI sound, in knob units (A and D x 2 s, S level, R x 3 s):
+     struck and plucked sounds start at once and fade, bowed and blown ones swell a little and hold,
+     pads bloom slowly. Picking a sound for a layer sets its envelope to this, and the envelope's notch sits here. */
+  var ENV_FAMILY = [
+    [0, 0.9, 0.25, 0.15], [0, 0.8, 0, 0.3], [0.01, 0.1, 1, 0.08], [0, 0.9, 0.15, 0.12],
+    [0, 0.6, 0.4, 0.06], [0.06, 0.2, 0.9, 0.15], [0.12, 0.3, 0.9, 0.2], [0.03, 0.25, 0.85, 0.08],
+    [0.03, 0.2, 0.9, 0.06], [0.02, 0.2, 0.9, 0.06], [0, 0.3, 0.8, 0.08], [0.35, 0.5, 0.85, 0.5],
+    [0.15, 0.6, 0.7, 0.5], [0, 0.8, 0.1, 0.15], [0, 0.5, 0, 0.2], [0, 0.5, 1, 0.2]];
+  var ENV_SOUND = {
+    5: [0, 0.8, 0.3, 0.2], 6: [0, 0.8, 0.3, 0.2], 7: [0, 0.6, 0, 0.1], 8: [0, 0.4, 0.2, 0.05],
+    11: [0, 0.9, 0, 0.4], 12: [0, 1, 0, 0.5], 13: [0, 0.3, 0, 0.1], 14: [0, 0.3, 0, 0.1], 15: [0, 1, 0, 0.6],
+    22: [0.03, 0.1, 1, 0.1], 23: [0.02, 0.2, 0.9, 0.08], 24: [0.03, 0.1, 1, 0.1],
+    29: [0, 0.15, 0, 0.05], 30: [0, 0.5, 0.7, 0.12], 31: [0, 0.5, 0.7, 0.12], 32: [0, 0.9, 0, 0.3],
+    36: [0.01, 0.6, 0.6, 0.1], 39: [0, 0.3, 0.7, 0.06], 40: [0, 0.3, 0.7, 0.06],
+    45: [0.05, 0.2, 0.9, 0.15], 46: [0, 0.25, 0, 0.1], 47: [0, 0.9, 0, 0.4], 48: [0, 0.6, 0, 0.4],
+    51: [0.15, 0.3, 0.85, 0.25], 52: [0.15, 0.3, 0.85, 0.25], 53: [0.15, 0.3, 0.9, 0.25], 54: [0.15, 0.3, 0.9, 0.25], 55: [0.1, 0.3, 0.85, 0.25], 56: [0, 0.3, 0, 0.15],
+    61: [0.05, 0.25, 0.85, 0.1], 63: [0.04, 0.3, 0.8, 0.12], 64: [0.04, 0.3, 0.8, 0.12],
+    77: [0.06, 0.2, 0.9, 0.08], 78: [0.04, 0.2, 0.9, 0.08], 80: [0.01, 0.2, 0.9, 0.05],
+    83: [0.01, 0.3, 0.8, 0.08], 84: [0, 0.3, 0.7, 0.1], 86: [0.05, 0.3, 0.85, 0.15],
+    91: [0.05, 0.4, 0.75, 0.25], 94: [0.25, 0.5, 0.7, 0.5], 96: [0.4, 0.5, 0.8, 0.6],
+    99: [0, 0.8, 0.2, 0.5], 101: [0.05, 0.6, 0.7, 0.4], 102: [0.3, 0.6, 0.7, 0.5], 103: [0.1, 0.6, 0.7, 0.6], 104: [0.1, 0.6, 0.7, 0.5],
+    110: [0.03, 0.1, 1, 0.08], 111: [0.04, 0.2, 0.9, 0.12], 112: [0.02, 0.2, 0.9, 0.06],
+    115: [0, 0.6, 0, 0.25], 116: [0, 0.15, 0, 0.05], 117: [0, 0.6, 0, 0.3], 120: [0, 0.5, 1, 0.1],
+    122: [0.03, 0.5, 1, 0.2], 123: [0.1, 0.5, 1, 0.3], 126: [0.1, 0.5, 1, 0.3], 127: [0.1, 0.5, 1, 0.3], 128: [0, 0.5, 1, 0.15] };
+  function envSuggest(prog) { var e = ENV_SOUND[prog] || ENV_FAMILY[famOf(prog)]; return { a: e[0], d: e[1], s: e[2], r: e[3] }; }
+
+  /* a fresh layer: gemi opens with layer 1, and the plus button adds layers 2 and 3 like this (matches Parameters.h) */
+  var LAYER_DEFAULTS = [{ prog: 1, k: [0.8, 0.5, 0.9, 0.1] }, { prog: 49, k: [0.7, 0.5, 0.9, 0.1] }, { prog: 90, k: [0.6, 0.5, 0.85, 0.1] }];
+  var LAYER_KNOBS = ['Level', 'Pan', 'Cutoff', 'Reso'], LAYER_TUNE = ['Octave', 'Semi', 'Fine'];
+  var GLOBALS = [['Reverb', 0.45], ['Chorus', 0.2], ['Vibrato', 0], ['Glide', 0], ['Volume', 0.8]];
+  function globalDefault(name) { return GLOBALS.filter(function (g) { return g[0] === name; })[0][1]; }
 
   /* ---------- derive the theme ---------- */
   function theme() {
@@ -700,19 +736,29 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
 
   var KB_LOW = 36;
   function whiteNote(i) { return KB_LOW + Math.floor(i / 7) * 12 + [0, 2, 4, 5, 7, 9, 11][i % 7]; }
+  /* a held key sounds every active layer, so it shows all their colours together, top to bottom;
+     in GM Player it shows the accent, since a key can belong to any channel */
+  function keyColors(t) {
+    if (ui.view === 'gm') return [mix(s.accent, '#FFFFFF', 0.3)];
+    var c = t.L.filter(function (x, i) { return i < ui.layers && ui.sw['layer' + i] !== false; });
+    return c.length ? c : [mix(s.accent, '#FFFFFF', 0.3)];
+  }
+  function keyFill(base, colors, k) {
+    if (colors.length === 1) return mix(base, colors[0], k);
+    return 'linear-gradient(180deg, ' + colors.map(function (c, i) { return mix(base, c, k) + ' ' + Math.round(i / (colors.length - 1) * 100) + '%'; }).join(', ') + ')';
+  }
   function keyboard(t, whites, height) {
-    var colors = s.keys === 'candy' ? t.L : [mix(s.accent, '#FFFFFF', 0.5)], html = '';
+    var colors = keyColors(t), html = '';
     var lit = function (n) { var o = ui.tw['key:' + n]; return o ? o.v : 0; };
-    var col = function (n) { return colors[(ui.keyCol[n] || 0) % colors.length]; };
     for (var i = 0; i < whites; i++) {
       var n = whiteNote(i), kv = lit(n);
-      html += '<div data-key="' + n + '" style="flex:1;border-right:1px solid rgba(60,40,120,0.18);background:' + mix(t.whiteKey, col(n), kv) + (kv > 0.02 && t.glow > 0 ? ';box-shadow:inset 0 -' + Math.round(10 * t.glow * kv) + 'px 14px -6px rgba(255,255,255,0.9)' : '') + '"></div>';
+      html += '<div data-key="' + n + '" style="flex:1;border-right:1px solid rgba(60,40,120,0.18);background:' + keyFill(t.whiteKey, colors, kv) + (kv > 0.02 && t.glow > 0 ? ';box-shadow:inset 0 -' + Math.round(10 * t.glow * kv) + 'px 14px -6px rgba(255,255,255,0.9)' : '') + '"></div>';
     }
     for (var j = 0; j < whites - 1; j++) if ([0, 1, 3, 4, 5].indexOf(j % 7) >= 0) {
       var bn = whiteNote(j) + 1, bv = lit(bn);
-      html += '<div data-key="' + bn + '" style="position:absolute;top:0;height:56%;width:' + (60 / whites).toFixed(2) + '%;left:' + (((j + 1) / whites) * 100 - 30 / whites).toFixed(2) + '%;border-radius:0 0 6px 6px;background:' + mix(t.blackKey, col(bn), bv * 0.85) + '"></div>';
+      html += '<div data-key="' + bn + '" style="position:absolute;top:0;height:56%;width:' + (60 / whites).toFixed(2) + '%;left:' + (((j + 1) / whites) * 100 - 30 / whites).toFixed(2) + '%;border-radius:0 0 6px 6px;background:' + keyFill(t.blackKey, colors, bv * 0.85) + '"></div>';
     }
-    return '<div aria-label="Keyboard" style="position:relative;height:' + height + 'px;flex:none;display:flex;border-radius:' + t.keysR + 'px;overflow:hidden;box-shadow:0 6px 22px rgba(60,30,110,0.3);cursor:pointer;touch-action:none">' + html + '</div>';
+    return '<div aria-label="Keyboard" data-tour="keys" style="position:relative;height:' + height + 'px;flex:none;display:flex;border-radius:' + t.keysR + 'px;overflow:hidden;box-shadow:0 6px 22px rgba(60,30,110,0.3);cursor:pointer;touch-action:none">' + html + '</div>';
   }
   function esc(x) { return String(x).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
@@ -724,8 +770,15 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
     return '<button type="button" data-act="theme" aria-label="Switch to ' + (toLight ? 'light' : 'dark') + ' mode" style="width:38px;height:38px;flex:none;display:flex;align-items:center;justify-content:center;border-radius:' + (t.btnR === 999 ? 999 : t.ctrlR) + 'px;border:1px solid ' + t.chromeBorder + ';background:' + t.chromeBg + ';color:' + t.headFg + '">' +
       '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + (toLight ? moon : sun) + '</svg></button>';
   }
+  /* the sound picker with arrows either side to step to the previous or next sound */
+  function pickRow(t, target, inner, tour) {
+    var arrow = function (d) {
+      return '<button type="button" data-act="' + (d < 0 ? 'prev' : 'next') + '-' + target + '" aria-label="' + (d < 0 ? 'Previous' : 'Next') + ' sound" style="width:24px;height:40px;flex:none;padding:0;border-radius:' + t.ctrlR + 'px;border:1px solid ' + t.ctrlBorder + ';background:' + t.ctrlBg + ';color:' + t.fg + ';font-size:15px;font-weight:800">' + (d < 0 ? '‹' : '›') + '</button>';
+    };
+    return '<div' + (tour ? ' data-tour="' + tour + '"' : '') + ' style="display:flex;gap:4px;min-width:0;margin-bottom:6px">' + arrow(-1) + '<div style="flex:1;min-width:0">' + inner + '</div>' + arrow(1) + '</div>';
+  }
   function picker(t, num, name, family, numColor, act, famDot) {
-    return '<button type="button"' + (act ? ' data-act="' + act + '" aria-haspopup="dialog"' : '') + ' style="height:40px;width:100%;display:flex;align-items:center;gap:8px;padding:0 12px;border-radius:' + t.ctrlR + 'px;border:1px solid ' + t.ctrlBorder + ';background:' + t.ctrlBg + ';color:' + t.fg + ';text-align:left">' +
+    return '<button type="button"' + (act ? ' data-act="' + act + '" aria-haspopup="dialog"' : '') + ' style="height:40px;width:100%;display:flex;align-items:center;gap:7px;padding:0 9px;border-radius:' + t.ctrlR + 'px;border:1px solid ' + t.ctrlBorder + ';background:' + t.ctrlBg + ';color:' + t.fg + ';text-align:left">' +
       '<span style="font-size:11px;font-weight:800;color:' + numColor + '">' + num + '</span><span style="flex:1;min-width:0;display:flex;flex-direction:column"><span class="clip" style="font-size:14px;font-weight:800">' + name + '</span><span style="display:flex;align-items:center;gap:5px;font-size:10px;font-weight:700;color:' + t.sub + '">' + (famDot ? '<span style="width:7px;height:7px;border-radius:50%;flex:none;background:' + famDot + '"></span>' : '') + family + '</span></span><span aria-hidden="true" style="font-size:11px;color:' + t.sub + '">▾</span></button>';
   }
 
@@ -733,7 +786,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
   function header(t, center) {
     return '<header style="display:flex;align-items:center;gap:14px;height:64px;flex:none;color:' + t.headFg + '">' +
       '<div style="display:flex;flex-direction:column;gap:3px;min-width:200px"><div style="display:flex;align-items:baseline;gap:8px">' +
-      '<button type="button" data-act="menu" aria-haspopup="menu" aria-expanded="' + ui.menu + '" title="gemi menu" style="display:flex;align-items:baseline;gap:4px;padding:0;border:none;background:transparent;color:inherit;cursor:pointer">' +
+      '<button type="button" data-act="menu" data-tour="menu" aria-haspopup="menu" aria-expanded="' + ui.menu + '" title="gemi menu" style="display:flex;align-items:baseline;gap:4px;padding:0;border:none;background:transparent;color:inherit;cursor:pointer">' +
       '<span style="font-family:' + t.display + ';font-weight:' + t.displayWeight + ';font-size:' + t.wordSize + 'px;line-height:0.9;text-shadow:' + t.wordGlow + '">gemi</span>' +
       '<svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.75;transform:rotate(' + (ui.menu ? 180 : 0) + 'deg);transition:transform 0.15s ease;filter:drop-shadow(0 1px 2px rgba(20,12,60,0.35))"><path d="M3 4.5 6 7.5 9 4.5"/></svg></button>' +
       '<span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:999px;background:' + t.accent + ';color:' + t.accentInk + '">v' + esc(ui.version) + '</span></div>' +
@@ -765,6 +818,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
       '<div style="height:1px;margin:4px 6px;background:' + t.ctrlBorder + '"></div>' +
       '<div style="display:flex;align-items:center;gap:10px;height:36px;padding:0 10px">' + '<span style="flex:1;font-size:13px;font-weight:800">Reduce motion<span style="display:block;font-size:11px;font-weight:700;color:' + t.sub + '">' + (rm ? 'Background paused' : 'Aurora and clouds move') + '</span></span>' + toggle(t, 'reduceMotion', rm, t.accent, 'Reduce motion') + '</div>' +
       '<div style="height:1px;margin:4px 6px;background:' + t.ctrlBorder + '"></div>' +
+      lab('HELP') + menuItem(t, 'Show tutorial', 'tour-start', null, '<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24"><path d="M12 0C13 8 16 11 24 12 16 13 13 16 12 24 11 16 8 13 0 12 8 11 11 8 12 0Z" fill="currentColor"/></svg>') +
       menuItem(t, 'About gemi', 'about', null, '<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>') + '</div>';
   }
   function aboutCard(t) {
@@ -776,12 +830,10 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
       '<div style="font-size:12px;font-weight:700;line-height:1.5;color:' + t.sub + '">Sounds: GeneralUser GS by S. Christian Collins.<br>Engine: FluidSynth (LGPL-2.1), included as a replaceable library.<br>Fonts: Gaegu and Nunito (SIL Open Font License).<br>Built with JUCE. VST is a trademark of Steinberg Media Technologies GmbH.<br>Full licences are in the plugin bundle.</div>' +
       '<div style="display:flex;justify-content:flex-end;margin-top:6px">' + button(t, 'Close', 'primary', 'data-act="about-close"') + '</div></div></div>';
   }
-  var LAYERS = [['LAYER 1', '053', 'Choir Aahs', 'Ensemble', [0.8, 0.4, 0.72, 0.2]], ['LAYER 2', '095', 'Pad 7 (halo)', 'Synth Pad', [0.6, 0.6, 0.55, 0.35]], ['LAYER 3', '009', 'Celesta', 'Chromatic Perc.', [0.45, 0.5, 0.9, 0.1]]];
-  var TUNE = [[0, 0, 0], [0, 7, 6], [1, 0, -4]];
   /* the view switch stays put: what sits beside it gets the same width in both views */
-  function headerCenter(t, rest) { return modeSwitch(t) + '<div style="width:380px;display:flex;align-items:center;gap:6px">' + rest + '</div>'; }
+  function headerCenter(t, rest, tour) { return modeSwitch(t) + '<div' + (tour ? ' data-tour="' + tour + '"' : '') + ' style="width:380px;display:flex;align-items:center;gap:6px">' + rest + '</div>'; }
   function modeSwitch(t) {
-    return seg(t, [{ label: 'Synth', on: ui.view === 'synth', act: 'view-synth' }, { label: 'GM Player', on: ui.view === 'gm', act: 'view-gm' }], t.accent, t.accentInk, t.chromeBg, t.chromeBorder, t.headFg, 30);
+    return '<div data-tour="mode">' + seg(t, [{ label: 'Synth', on: ui.view === 'synth', act: 'view-synth' }, { label: 'GM Player', on: ui.view === 'gm', act: 'view-gm' }], t.accent, t.accentInk, t.chromeBg, t.chromeBorder, t.headFg, 30) + '</div>';
   }
   function synthView(t) {
     var chrome = 'border:1px solid ' + t.chromeBorder + ';background:' + t.chromeBg + ';color:' + t.headFg;
@@ -789,27 +841,38 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
       '<button type="button" data-act="combo-open" aria-haspopup="dialog" style="width:210px;height:38px;display:flex;align-items:center;gap:10px;padding:0 14px;border-radius:' + t.ctrlR + 'px;' + chrome + ';text-align:left">' +
       '<span style="font-size:11px;font-weight:800;color:' + t.accentOnChrome + '">COMBOS</span><span style="flex:1;font-size:15px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(ui.presetName) + '</span><span aria-hidden="true" style="font-size:11px">▾</span></button>' +
       '<button type="button" data-act="combo-next" aria-label="Next combo" style="width:34px;height:38px;border-radius:' + t.ctrlR + 'px;' + chrome + ';font-weight:800">›</button>' +
-      button(t, 'Save', 'warm', 'data-act="combo-save"', 38));
-    var cards = LAYERS.map(function (d, i) {
-      var c = t.L[i], onId = 'layer' + i, on = onId in ui.sw ? ui.sw[onId] : (ui.sw[onId] = true);
+      button(t, 'Save', 'warm', 'data-act="combo-save"', 38), 'combos');
+    var cards = [0, 1, 2].slice(0, ui.layers).map(function (i) {
+      var c = t.L[i], onId = 'layer' + i, on = onId in ui.sw ? ui.sw[onId] : (ui.sw[onId] = true), label = 'LAYER ' + (i + 1);
       var inkC = t.dark ? c : mix(c, '#241D62', 0.45), e = shownEnv('L' + i, ui.layerEnv[i]);
-      return '<section class="' + t.panelClass + '" aria-label="' + d[0] + '" style="' + panelStyle(t) + 'padding:12px 13px;display:flex;flex-direction:column;gap:9px;min-width:0;overflow:hidden;opacity:' + (on ? 1 : 0.5) + '">' +
-        panelLayer(t) + '<div style="display:flex;align-items:center;gap:8px">' + led(t, c, on, 13) + '<div style="flex:1;font-size:13px;font-weight:800;letter-spacing:1px;color:' + t.label + '">' + d[0] + '</div>' + toggle(t, onId, true, c, d[0] + ' on') + '</div>' +
-        (function () { var pg = ui.layerProg[i]; return picker(t, pad3(pg), GM_NAMES[pg - 1], GM_FAMILIES[famOf(pg)], inkC, 'pick-L-' + i, famColor(t, famOf(pg)).fill); })() +
-        '<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:2px">' + ['Level', 'Pan', 'Cutoff', 'Reso'].map(function (k, j) { return knob(t, 'L' + i + k, k, d[4][j], c, 'below'); }).join('') + '</div>' +
-        '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px">' + ['Octave', 'Semi', 'Fine'].map(function (k, j) {
-          var id = 'L' + i + k; if (!(id in ui.steps)) ui.steps[id] = TUNE[i][j];
+      var remove = ui.layers > 1 ? '<button type="button" data-act="layer-remove-' + i + '" aria-label="Remove layer ' + (i + 1) + '" title="Remove layer" style="width:24px;height:24px;flex:none;padding:0;border-radius:50%;border:1px solid ' + t.ctrlBorder + ';background:' + t.ctrlBg + ';color:' + t.sub + ';font-size:11px;font-weight:800">✕</button>' : '';
+      return '<section class="' + t.panelClass + '" aria-label="' + label + '" style="' + panelStyle(t) + 'padding:12px 13px;display:flex;flex-direction:column;gap:9px;min-width:0;overflow:hidden;opacity:' + (on ? 1 : 0.5) + '">' +
+        panelLayer(t) + '<div style="display:flex;align-items:center;gap:8px"><div style="flex:1;font-size:13px;font-weight:800;letter-spacing:1px;color:' + t.label + '">' + label + '</div>' + toggle(t, onId, true, c, label + ' on') + remove + '</div>' +
+        (function () { var pg = ui.layerProg[i]; return pickRow(t, 'L-' + i, picker(t, pad3(pg), GM_NAMES[pg - 1], GM_FAMILIES[famOf(pg)], inkC, 'pick-L-' + i, famColor(t, famOf(pg)).fill), i === 0 ? 'pick0' : ''); })() +
+        '<div' + (i === 0 ? ' data-tour="knobs0"' : '') + ' style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:2px">' + LAYER_KNOBS.map(function (k, j) { return knob(t, 'L' + i + k, k, LAYER_DEFAULTS[i].k[j], c, 'below'); }).join('') + '</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px">' + LAYER_TUNE.map(function (k) {
+          var id = 'L' + i + k; if (!(id in ui.steps)) ui.steps[id] = 0;
           return '<div style="display:flex;flex-direction:column;gap:3px"><div style="font-size:10px;font-weight:800;color:' + t.label + ';text-align:center">' + k + '</div>' + stepper(t, id, k, ui.steps[id], 26) + '</div>';
         }).join('') + '</div>' +
-        '<div style="flex:1;min-height:0;display:flex;flex-direction:column;gap:4px;padding:7px 10px;border-radius:' + t.ctrlR + 'px;background:' + t.well + '"><div style="font-size:10px;font-weight:800;letter-spacing:1px;color:' + t.label + '">ENVELOPE</div>' +
+        '<div' + (i === 0 ? ' data-tour="env0"' : '') + ' style="flex:1;min-height:0;display:flex;flex-direction:column;gap:4px;padding:7px 10px;border-radius:' + t.ctrlR + 'px;background:' + t.well + '"><div style="font-size:10px;font-weight:800;letter-spacing:1px;color:' + t.label + '">ENVELOPE</div>' +
         '<div style="flex:1;min-height:22px;position:relative">' + envSvg(t, e, c, '100%') + envHandles(t, e, c, 'L' + i) + '</div>' + adsrRow(t, e, c, 'L' + i, 26) + '</div>' +
         '</section>';
     }).join('');
-    var globals = [['Reverb', 0.7], ['Chorus', 0.35], ['Vibrato', 0.15], ['Glide', 0], ['Volume', 0.8]].map(function (g) { return knob(t, 'G' + g[0], g[0], g[1], s.accent, 'side'); }).join('');
-    var strip = '<section class="' + t.panelClass + '" aria-label="Global" style="' + panelStyle(t) + 'flex:none;height:74px;box-sizing:border-box;display:flex;align-items:center;gap:16px;padding:0 18px;overflow:hidden">' + panelLayer(t) + globals + '<div style="flex:1"></div>' +
+    /* the empty space beside the layers: one big plus to add the next layer */
+    if (ui.layers < 3) {
+      var nc = t.L[ui.layers];
+      cards += '<button type="button" data-act="layer-add" data-tour="add" aria-label="Add layer ' + (ui.layers + 1) + '" style="grid-column:span ' + (3 - ui.layers) + ';display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;border-radius:' + s.radius + 'px;border:2px dashed ' + (t.dark ? 'rgba(232,221,255,0.45)' : 'rgba(67,62,124,0.3)') + ';background:' + (t.dark ? 'rgba(42,34,112,0.28)' : 'rgba(255,252,247,0.32)') + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);color:' + t.headFg + '">' +
+        '<span aria-hidden="true" class="plusorb" style="width:92px;height:92px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:' + nc + ';box-shadow:0 10px 28px ' + nc + '88, inset 0 -6px 0 ' + mix(nc, '#241D62', 0.2) + '">' +
+        '<svg width="44" height="44" viewBox="0 0 44 44"><path d="M22 6v32M6 22h32" stroke="' + ink(nc) + '" stroke-width="6" stroke-linecap="round"/></svg></span>' +
+        '<span style="font-size:16px;font-weight:800;text-shadow:' + t.wordGlow + '">Add layer ' + (ui.layers + 1) + '</span>' +
+        '<span style="font-size:12px;font-weight:700;color:' + t.headSub + ';text-shadow:' + t.wordGlow + '">Up to 3 layers. Every key plays them all.</span></button>';
+    }
+    var globals = GLOBALS.map(function (g) { return knob(t, 'G' + g[0], g[0], g[1], s.accent, 'side'); }).join('');
+    var mpeOn = 'mpe' in ui.sw ? ui.sw.mpe : (ui.sw.mpe = false);
+    var strip = '<section class="' + t.panelClass + '" aria-label="Global" data-tour="globals" style="' + panelStyle(t) + 'flex:none;height:74px;box-sizing:border-box;display:flex;align-items:center;gap:16px;padding:0 18px;overflow:hidden">' + panelLayer(t) + globals + '<div style="flex:1"></div>' +
       seg(t, [{ label: 'Poly', on: !ui.mono, act: 'poly' }, { label: 'Mono', on: ui.mono, act: 'mono' }], t.l2, t.l2Ink, t.ctrlBg, t.ctrlBorder, t.fg, 28) +
-      '<div style="display:flex;align-items:center;gap:8px" title="MPE arrives in a later version">' + '<span style="opacity:0.45;pointer-events:none">' + toggle(t, 'mpe', false, t.accent, 'MPE').replace('<button ', '<button disabled tabindex="-1" ') + '</span>' +
-      '<div style="display:flex;flex-direction:column"><span style="font-size:12px;font-weight:800;color:' + t.label + '">MPE</span><span style="display:grid;font-size:11px;font-weight:700;color:' + t.sub + '"><span style="grid-area:1/1">Soon · Voices ' + ui.voices + '</span><span style="grid-area:1/1;visibility:hidden">Soon · Voices 000</span></span></div></div></section>';
+      '<div data-tour="mpe" style="display:flex;align-items:center;gap:8px" title="MPE: channel 1 is the master channel; channels 2 to 16 each play one note with its own bend, pressure and slide">' + toggle(t, 'mpe', false, t.accent, 'MPE') +
+      '<div style="display:flex;flex-direction:column"><span style="font-size:12px;font-weight:800;color:' + t.label + '">MPE</span><span style="display:grid;font-size:11px;font-weight:700;color:' + t.sub + '"><span style="grid-area:1/1">' + (mpeOn ? 'On' : 'Off') + ' · Voices ' + ui.voices + '</span><span style="grid-area:1/1;visibility:hidden">Off · Voices 000</span></span></div></div></section>';
     return titleMenu(t) + aboutCard(t) + soundPicker(t) + comboList(t) + wrap(t, header(t, center) + '<main style="flex:1;min-height:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px">' + cards + '</main>' + strip + keyboard(t, 36, 74));
   }
 
@@ -831,6 +894,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
       '<button type="button" data-act="pick-ch-' + n + '" aria-haspopup="dialog" aria-label="Channel ' + n + ' sound: ' + d.name + '. Change sound" style="flex:1;min-width:0;height:100%;display:flex;align-items:center;gap:8px;padding:0;border:none;background:transparent;color:inherit;text-align:left">' +
       '<span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;line-height:1.2"><span style="font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + d.name + '</span><span style="font-size:10px;font-weight:800;color:' + fc.text + '">' + d.famName + '</span></span>' +
       '<span aria-hidden="true" style="font-size:10px;color:' + t.sub + '">▾</span></button>' +
+      ['prev', 'next'].map(function (dir) { return '<button type="button" data-act="' + dir + '-ch-' + n + '" aria-label="' + (dir === 'prev' ? 'Previous' : 'Next') + ' sound for channel ' + n + '" style="width:20px;height:20px;flex:none;padding:0;border:none;border-radius:6px;font-size:13px;font-weight:800;line-height:1;background:' + t.ctrlBg + ';color:' + t.fg + ';box-shadow:inset 0 0 0 1px ' + t.ctrlBorder + '">' + (dir === 'prev' ? '‹' : '›') + '</button>'; }).join('') +
       mini('M', ui.mute[n], 'mute-' + n, t.l2) + mini('S', ui.solo[n], 'solo-' + n, t.accent) + '</div>';
   }
   function comboList(t) {
@@ -852,13 +916,24 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
       '<button type="button" data-act="combo-close" aria-label="Close" style="width:28px;height:28px;border-radius:50%;border:1px solid ' + t.ctrlBorder + ';background:' + t.ctrlBg + ';color:' + t.fg + ';font-weight:800">✕</button></div>' +
       section('FACTORY', 'factory') + section('SAVED', 'user') + '</div>';
   }
-  /* the sound dropdown: family chips on top (colour coded), that family's 8 sounds below; channel 10 lists drum kits */
+  /* the sound dropdown, two ways: family chips with that family's 8 sounds, or the full list of 128 with a tag
+     for each family to jump to it. Channel 10 lists drum kits. */
+  function soundRow(t, pg, cur, fc) {
+    var on = pg === cur;
+    return '<button type="button" data-act="pick-set-' + pg + '" aria-pressed="' + on + '" style="height:34px;display:flex;align-items:center;gap:9px;padding:0 12px;border-radius:' + t.ctrlR + 'px;border:1px solid ' + (on ? fc.fill : 'transparent') + ';background:' + (on ? t.ctrlBg : 'transparent') + ';color:' + t.fg + ';font-size:13px;font-weight:800;text-align:left">' +
+      '<span style="width:26px;font-size:11px;color:' + fc.text + '">' + pad3(pg) + '</span><span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + GM_NAMES[pg - 1] + '</span>' +
+      (on ? '<svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24"><path d="M12 0C13 8 16 11 24 12 16 13 13 16 12 24 11 16 8 13 0 12 8 11 11 8 12 0Z" fill="' + fc.fill + '"/></svg>' : '') + '</button>';
+  }
+  function famHead(t, f) {
+    var fc = famColor(t, f);
+    return '<div style="display:flex;align-items:center;gap:8px"><span style="width:12px;height:12px;border-radius:50%;background:' + fc.fill + '"></span><span style="font-size:14px;font-weight:800;color:' + fc.text + '">' + GM_FAMILIES[f] + '</span><span style="font-size:11px;font-weight:700;color:' + t.sub + '">' + pad3(f * 8 + 1) + '–' + pad3(f * 8 + 8) + '</span></div>';
+  }
   function soundPicker(t) {
     var pk = ui.picker; if (!pk) return '';
-    var drums = pk.target === 'ch-10', cur;
+    var drums = pk.target === 'ch-10', cur, list = ui.pickMode === 'list';
     if (pk.target.indexOf('ch-') === 0) cur = drums ? ui.kit : ui.gmProg[+pk.target.slice(3) - 1];
     else cur = ui.layerProg[+pk.target.slice(2)];
-    var title = pk.target.indexOf('ch-') === 0 ? 'Channel ' + pk.target.slice(3) + (drums ? ' · Drums' : '') : LAYERS[+pk.target.slice(2)][0].replace('LAYER', 'Layer');
+    var title = pk.target.indexOf('ch-') === 0 ? 'Channel ' + pk.target.slice(3) + (drums ? ' · Drums' : '') : 'Layer ' + (+pk.target.slice(2) + 1);
     var body;
     if (drums) {
       var dc = famColor(t, -1);
@@ -867,6 +942,18 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
         return '<button type="button" data-act="pick-set-' + k[0] + '" aria-pressed="' + on + '" style="height:40px;display:flex;align-items:center;gap:8px;padding:0 12px;border-radius:' + t.ctrlR + 'px;border:1px solid ' + (on ? dc.fill : t.ctrlBorder) + ';background:' + (on ? t.ctrlBg : 'transparent') + ';color:' + t.fg + ';font-size:13px;font-weight:800;text-align:left">' +
           '<span style="font-size:11px;color:' + dc.text + '">' + pad3(k[0]) + '</span><span style="flex:1">' + k[1] + '</span></button>';
       }).join('') + '</div>';
+    } else if (list) {
+      var tags = '<div role="navigation" aria-label="Jump to a family" style="display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px">' + GM_FAMILIES.map(function (f, i) {
+        var fc = famColor(t, i), has = famOf(cur) === i;
+        return '<button type="button" data-act="pick-jump-' + i + '" title="' + f + '" style="height:24px;display:flex;align-items:center;gap:5px;padding:0 7px;border-radius:999px;border:1px solid ' + (has ? fc.fill : t.ctrlBorder) + ';background:' + (has ? fc.fill + '38' : t.ctrlBg) + ';color:' + t.fg + ';font-size:10px;font-weight:800;white-space:nowrap;overflow:hidden">' +
+          '<span style="width:7px;height:7px;border-radius:50%;flex:none;background:' + fc.fill + '"></span><span style="overflow:hidden;text-overflow:ellipsis">' + GM_TAGS[i] + '</span></button>';
+      }).join('') + '</div>';
+      var all = '<div id="pklist" style="position:relative;height:318px;overflow-y:auto;padding-right:4px;display:flex;flex-direction:column;gap:10px">' + GM_FAMILIES.map(function (f, i) {
+        var fc = famColor(t, i), rows = '';
+        for (var k = 0; k < 8; k++) rows += soundRow(t, i * 8 + k + 1, cur, fc);
+        return '<div id="pkfam-' + i + '" style="display:flex;flex-direction:column;gap:5px">' + famHead(t, i) + '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px">' + rows + '</div></div>';
+      }).join('') + '</div>';
+      body = tags + all;
     } else {
       var fam = pk.fam;
       var chips = '<div role="tablist" aria-label="Families" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px">' + GM_FAMILIES.map(function (f, i) {
@@ -874,19 +961,14 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
         return '<button type="button" role="tab" aria-selected="' + on + '" data-act="pick-fam-' + i + '" style="height:30px;display:flex;align-items:center;gap:7px;padding:0 9px;border-radius:999px;border:1px solid ' + (on ? fc.fill : t.ctrlBorder) + ';box-shadow:' + (on ? 'inset 0 0 0 1px ' + fc.fill : 'none') + ';background:' + (on ? fc.fill + '38' : t.ctrlBg) + ';color:' + t.fg + ';font-size:12px;font-weight:800;text-align:left;white-space:nowrap">' +
           '<span style="width:9px;height:9px;border-radius:50%;flex:none;box-sizing:border-box;background:' + fc.fill + '"></span><span style="flex:1;overflow:hidden;text-overflow:ellipsis">' + f + '</span>' + (has && !on ? '<span aria-label="current" style="font-size:9px;color:' + fc.text + '">●</span>' : '') + '</button>';
       }).join('') + '</div>';
-      var fc2 = famColor(t, fam);
-      var list = '<div style="display:flex;align-items:center;gap:8px;margin-top:4px"><span style="width:12px;height:12px;border-radius:50%;background:' + fc2.fill + '"></span><span style="font-size:14px;font-weight:800;color:' + fc2.text + '">' + GM_FAMILIES[fam] + '</span><span style="font-size:11px;font-weight:700;color:' + t.sub + '">' + pad3(fam * 8 + 1) + '–' + pad3(fam * 8 + 8) + '</span></div>' +
-        '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px">' + [0, 1, 2, 3, 4, 5, 6, 7].map(function (k) {
-          var pg = fam * 8 + k + 1, on = pg === cur;
-          return '<button type="button" data-act="pick-set-' + pg + '" aria-pressed="' + on + '" style="height:34px;display:flex;align-items:center;gap:9px;padding:0 12px;border-radius:' + t.ctrlR + 'px;border:1px solid ' + (on ? fc2.fill : 'transparent') + ';background:' + (on ? t.ctrlBg : 'transparent') + ';color:' + t.fg + ';font-size:13px;font-weight:800;text-align:left">' +
-            '<span style="width:26px;font-size:11px;color:' + fc2.text + '">' + pad3(pg) + '</span><span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + GM_NAMES[pg - 1] + '</span>' +
-            (on ? '<svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24"><path d="M12 0C13 8 16 11 24 12 16 13 13 16 12 24 11 16 8 13 0 12 8 11 11 8 12 0Z" fill="' + fc2.fill + '"/></svg>' : '') + '</button>';
-        }).join('') + '</div>';
-      body = chips + list;
+      var rows8 = '';
+      for (var k2 = 0; k2 < 8; k2++) rows8 += soundRow(t, fam * 8 + k2 + 1, cur, famColor(t, fam));
+      body = chips + '<div style="margin-top:4px">' + famHead(t, fam) + '</div><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px">' + rows8 + '</div>';
     }
+    var modes = drums ? '' : seg(t, [{ label: 'By family', on: !list, act: 'pick-mode-family' }, { label: 'Full list', on: list, act: 'pick-mode-list' }], t.accent, t.accentInk, t.ctrlBg, t.ctrlBorder, t.fg, 26);
     return '<div style="position:absolute;inset:0;z-index:35;background:' + (t.dark ? 'rgba(20,12,60,0.35)' : 'rgba(80,70,130,0.18)') + '"></div>' +
-      '<div role="dialog" data-picker aria-label="Choose a sound" style="' + popIn('picker') + panelStyle(t) + 'background-color:' + (t.dark ? 'rgba(42,34,112,0.96)' : 'rgba(251,247,241,0.97)') + ';position:absolute;left:170px;top:110px;width:620px;z-index:36;color:' + t.fg + ';padding:16px 18px;display:flex;flex-direction:column;gap:10px;box-shadow:0 24px 60px rgba(18,10,58,0.4)">' +
-      '<div style="display:flex;align-items:center;gap:10px"><span style="font-size:15px;font-weight:800;flex:1">Choose a sound <span style="font-weight:700;color:' + t.sub + '">· ' + title + '</span></span>' +
+      '<div role="dialog" data-picker aria-label="Choose a sound" style="' + popIn('picker') + panelStyle(t) + 'background-color:' + (t.dark ? 'rgba(42,34,112,0.96)' : 'rgba(251,247,241,0.97)') + ';position:absolute;left:170px;top:' + (list ? 84 : 110) + 'px;width:620px;z-index:36;color:' + t.fg + ';padding:16px 18px;display:flex;flex-direction:column;gap:10px;box-shadow:0 24px 60px rgba(18,10,58,0.4)">' +
+      '<div style="display:flex;align-items:center;gap:10px"><span style="font-size:15px;font-weight:800;flex:1">Choose a sound <span style="font-weight:700;color:' + t.sub + '">· ' + title + '</span></span>' + modes +
       '<button type="button" data-act="pick-close" aria-label="Close" style="width:28px;height:28px;border-radius:50%;border:1px solid ' + t.ctrlBorder + ';background:' + t.ctrlBg + ';color:' + t.fg + ';font-weight:800">✕</button></div>' + body + '</div>';
   }
   function gmView(t) {
@@ -894,12 +976,12 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
     var tip = ui.gmTip ? '<section class="' + t.panelClass + '" aria-label="About GM Player" style="' + panelStyle(t) + 'flex:none;display:flex;align-items:center;gap:12px;padding:7px 10px 7px 14px">' + panelLayer(t) +
       '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" style="flex:none"><path d="M12 0C13 8 16 11 24 12 16 13 13 16 12 24 11 16 8 13 0 12 8 11 11 8 12 0Z" fill="' + t.accentLine + '"/></svg>' +
       '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px"><span style="font-size:12px;font-weight:800">One instrument per MIDI channel, up to 16 at once. Channel 10 is drums.</span>' +
-      '<span style="font-size:11px;font-weight:700;line-height:1.35;color:' + t.sub + '">Drag a General MIDI file into your DAW and route each part to its channel. Just want to play? Use Synth, or keep Follow keyboard on.</span></div>' +
+      '<span style="font-size:11px;font-weight:700;line-height:1.35;color:' + t.sub + '">Drag a General MIDI file into your DAW and route each part to its channel. Each channel also has its own output: load gemi as a multi-output instrument to mix them separately.</span></div>' +
       button(t, 'Switch to Synth', 'ghost', 'data-act="view-synth"', 28) + button(t, 'Got it', 'primary', 'data-act="gm-tip-close"', 28) + '</section>' : '';
     var rows = function (from) { var h = ''; for (var n = from; n < from + 8; n++) h += gmRow(t, n); return h; };
     var col = function (from) { return '<section class="' + t.panelClass + '" aria-label="Channels ' + from + ' to ' + (from + 7) + '" style="' + panelStyle(t) + 'min-height:0;padding:8px 8px;display:grid;grid-template-rows:repeat(8,minmax(0,1fr));gap:5px">' + panelLayer(t) + rows(from) + '</section>'; };
     var follow = 'follow' in ui.sw ? ui.sw.follow : (ui.sw.follow = true);
-    var globals = [['Reverb', 0.7], ['Chorus', 0.35], ['Volume', 0.8]].map(function (g) { return knob(t, 'G' + g[0], g[0], g[1], s.accent, 'side'); }).join('');
+    var globals = ['Reverb', 'Chorus', 'Volume'].map(function (g) { return knob(t, 'G' + g, g, globalDefault(g), s.accent, 'side'); }).join('');
     var strip = '<section class="' + t.panelClass + '" aria-label="Global" style="' + panelStyle(t) + 'flex:none;height:74px;box-sizing:border-box;display:flex;align-items:center;gap:16px;padding:0 18px;overflow:hidden">' + panelLayer(t) + globals + '<div style="flex:1"></div>' +
       '<div style="display:flex;align-items:center;gap:8px">' + toggle(t, 'follow', true, t.accent, 'Follow keyboard') +
       '<div style="display:flex;flex-direction:column"><span style="font-size:12px;font-weight:800;color:' + t.label + '">Follow keyboard</span><span style="display:grid;font-size:11px;font-weight:700;color:' + t.sub + '"><span style="grid-area:1/1;visibility:' + (follow ? 'visible' : 'hidden') + '">Ch 1 input plays ch ' + ui.ch + '</span><span style="grid-area:1/1;visibility:' + (follow ? 'hidden' : 'visible') + '">Channels as routed</span></span></div></div>' +
@@ -923,8 +1005,15 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
     var plug = $('plugin');
     if (!$('pbd')) plug.innerHTML = '<div id="pbd" style="position:absolute;left:0;top:0;width:960px;height:640px;isolation:isolate;overflow:hidden"></div><div id="pcontent" style="position:relative"></div>';
     syncBackdrop($('pbd'), t, PLUGIN_BD);
+    var pl = $('pklist'), keepScroll = pl ? pl.scrollTop : 0;
     $('pcontent').innerHTML = ui.view === 'gm' ? gmView(t) : synthView(t);
     fit();
+    if ((pl = $('pklist'))) {
+      var sec = ui.picker.jump !== null && ui.picker.jump !== undefined && $('pkfam-' + ui.picker.jump);
+      pl.scrollTop = sec ? sec.offsetTop : keepScroll;
+      ui.picker.jump = null;
+    }
+    placeTour(t);
     placeTip();
     kickAurora();
     if (fkey && !document.body.contains(ae)) {
@@ -979,7 +1068,6 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
     if ((el = target.closest('[data-sw]'))) {
       var sid = el.dataset.sw, now = !ui.sw[sid], c0 = centerOf(el);
       if (sid === 'reduceMotion') { st.reduceMotion = now; }
-      if (sid === 'mpe') return;
       ui.sw[sid] = now; tw('s:' + sid, now ? 0 : 1).t = now ? 1 : 0;
       kick(); return;
     }
@@ -995,6 +1083,15 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
       else if (a.indexOf('size-') === 0) ui.size = +a.slice(5);
       else if (a === 'about') { ui.menu = false; ui.about = true; openedAt.about = performance.now(); }
       else if (a === 'about-close') ui.about = false;
+      else if (a === 'tour-start') { ui.menu = false; tourStart(); }
+      else if (a === 'tour-next') tourGo(1);
+      else if (a === 'tour-back') tourGo(-1);
+      else if (a === 'tour-skip') tourEnd();
+      else if (a === 'layer-add') { if (ui.layers < 3) { freshLayer(ui.layers); ui.layers++; } }
+      else if (a.indexOf('layer-remove-') === 0) removeLayer(+a.slice(13));
+      else if (a.indexOf('prev-') === 0 || a.indexOf('next-') === 0) stepSound(a.slice(5), a.indexOf('next-') === 0 ? 1 : -1);
+      else if (a === 'pick-mode-family' || a === 'pick-mode-list') { ui.pickMode = a.slice(10); if (ui.pickMode === 'list') ui.picker.jump = famOf(pickerCurrent() || 1); }
+      else if (a.indexOf('pick-jump-') === 0) ui.picker.jump = +a.slice(10);
       else if (a === 'view-synth') ui.view = 'synth';
       else if (a === 'view-gm') ui.view = 'gm';
       else if (a.indexOf('ch-') === 0) ui.ch = +a.slice(3);
@@ -1005,12 +1102,12 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
         var tg = a.indexOf('pick-ch-') === 0 ? 'ch-' + a.slice(8) : 'L-' + a.slice(7);
         if (tg.indexOf('ch-') === 0) ui.ch = +tg.slice(3);
         var cp = tg.indexOf('ch-') === 0 ? ui.gmProg[+tg.slice(3) - 1] : ui.layerProg[+tg.slice(2)];
-        ui.picker = { target: tg, fam: famOf(cp || 1) }; openedAt.picker = performance.now();
+        ui.picker = { target: tg, fam: famOf(cp || 1), jump: ui.pickMode === 'list' ? famOf(cp || 1) : null }; openedAt.picker = performance.now();
       }
       else if (a.indexOf('pick-fam-') === 0) ui.picker.fam = +a.slice(9);
       else if (a.indexOf('pick-set-') === 0) {
         var pv = +a.slice(9), tg2 = ui.picker.target;
-        if (tg2 === 'ch-10') ui.kit = pv; else if (tg2.indexOf('ch-') === 0) ui.gmProg[+tg2.slice(3) - 1] = pv; else ui.layerProg[+tg2.slice(2)] = pv;
+        if (tg2 === 'ch-10') ui.kit = pv; else if (tg2.indexOf('ch-') === 0) ui.gmProg[+tg2.slice(3) - 1] = pv; else setLayerSound(+tg2.slice(2), pv);
         ui.picker = null;
       }
       else if (a === 'pick-close') ui.picker = null;
@@ -1026,6 +1123,112 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
       else return;
       render();
     }
+  }
+
+  /* ---------- sounds and layers ---------- */
+  function pickerCurrent() {
+    var tg = ui.picker && ui.picker.target; if (!tg) return 0;
+    return tg === 'ch-10' ? ui.kit : tg.indexOf('ch-') === 0 ? ui.gmProg[+tg.slice(3) - 1] : ui.layerProg[+tg.slice(2)];
+  }
+  /* a layer's new sound brings its suggested envelope, and the envelope's notch moves there too */
+  function setLayerSound(i, pg) {
+    ui.layerProg[i] = pg;
+    var e = envSuggest(pg);
+    ['a', 'd', 's', 'r'].forEach(function (k) { ui.layerEnv[i][k] = e[k]; var o = tw('e:L' + i + ':' + k, e[k]); o.t = e[k]; o.d = e[k]; });
+    kick();
+  }
+  function envNotches() {
+    ui.layerProg.forEach(function (pg, i) { var e = envSuggest(pg); ['a', 'd', 's', 'r'].forEach(function (k) { tw('e:L' + i + ':' + k, ui.layerEnv[i][k]).d = e[k]; }); });
+  }
+  function stepSound(target, d) {
+    var wrap = function (pg) { return (pg - 1 + d + 128) % 128 + 1; };
+    if (target === 'ch-10') {
+      var ki = GM_KITS.map(function (k) { return k[0]; }).indexOf(ui.kit);
+      ui.kit = GM_KITS[((ki < 0 ? 0 : ki) + d + GM_KITS.length) % GM_KITS.length][0];
+    } else if (target.indexOf('ch-') === 0) {
+      var n = +target.slice(3); ui.gmProg[n - 1] = wrap(ui.gmProg[n - 1]); ui.ch = n;
+    } else {
+      var i = +target.slice(2); setLayerSound(i, wrap(ui.layerProg[i]));
+    }
+  }
+  var LAYER_PARAMS = ['on', 'level', 'pan', 'cutoff', 'reso', 'attack', 'decay', 'sustain', 'release', 'oct', 'semi', 'fine'];
+  /* an added layer starts fresh: its slot's default sound with that sound's envelope */
+  function freshLayer(i) {
+    var d = LAYER_DEFAULTS[i];
+    PARAM_BY_ID['l' + (i + 1) + '_on'].set(1, true);
+    LAYER_KNOBS.forEach(function (k, j) { var o = tw('k:L' + i + k, d.k[j]); o.t = o.v = d.k[j]; });
+    LAYER_TUNE.forEach(function (k) { ui.steps['L' + i + k] = 0; });
+    setLayerSound(i, d.prog);
+    ['a', 'd', 's', 'r'].forEach(function (k) { var o = tw('e:L' + i + ':' + k, 0); o.v = o.t; });
+  }
+  /* removing a layer moves the ones after it down, so the layers stay numbered 1, 2, 3 */
+  function removeLayer(i) {
+    for (var j = i; j < ui.layers - 1; j++) {
+      ui.layerProg[j] = ui.layerProg[j + 1];
+      LAYER_PARAMS.forEach(function (sfx) { PARAM_BY_ID['l' + (j + 1) + '_' + sfx].set(PARAM_BY_ID['l' + (j + 2) + '_' + sfx].get(), true); });
+      ['a', 'd', 's', 'r'].forEach(function (k) { tw('e:L' + j + ':' + k, 0).d = tw('e:L' + (j + 1) + ':' + k, 0).d; });
+    }
+    ui.layers = Math.max(1, ui.layers - 1);
+  }
+
+  /* ---------- tutorial: a short tour on first open, again from the gemi menu ---------- */
+  var TOUR = [
+    { title: 'Welcome to gemi', text: 'Every General MIDI sound in one plugin. Here is a quick tour; it takes under a minute.' },
+    { at: 'pick0', title: 'Choose a sound', text: 'Click the name to browse all 128 sounds, by family or as one long list. The arrows step to the previous or next sound. Each sound arrives with an envelope that suits it.' },
+    { at: 'add', title: 'Stack up to three layers', text: 'Click the plus to add a layer. Every key you play sounds all your layers together. A layer\'s switch mutes it; the cross removes it.' },
+    { at: 'knobs0', title: 'Shape the sound', text: 'Drag a knob up or down. It clicks into a notch at its default: hold Shift to glide past, or Cmd for fine moves. Double-click resets.' },
+    { at: 'env0', title: 'The envelope', text: 'How each note starts, holds and fades. Drag the points on the curve, or the A, D, S and R values below it.' },
+    { at: 'combos', title: 'Combos', text: 'A combo keeps all your layers and settings together. Step through the factory combos or save your own.' },
+    { at: 'globals', title: 'For every layer', text: 'Reverb, chorus, vibrato and glide apply to all layers. Mono plays one note at a time.' },
+    { at: 'mpe', title: 'MPE', text: 'Playing an MPE controller? Switch MPE on and every note bends, presses and slides on its own.' },
+    { at: 'keys', title: 'Play', text: 'Click or drag across the keys, or play from your MIDI keyboard.' },
+    { at: 'mode', title: 'GM Player', text: 'For General MIDI songs: 16 channels with one sound each, drums on channel 10, and a separate output for every channel.' },
+    { at: 'menu', title: 'Any time', text: 'Theme, window size and this tutorial live in the gemi menu. Have fun!' }];
+  function tourTarget(step) { return TOUR[step].at ? document.querySelector('#pcontent [data-tour="' + TOUR[step].at + '"]') : null; }
+  function tourStart() { ui.tour = { step: 0 }; ui.view = 'synth'; ui.picker = null; ui.combos = false; ui.about = false; ui.menu = false; }
+  function tourEnd() { ui.tour = null; if (!ui.tourSeen) { ui.tourSeen = true; send('tourSeen'); } }
+  function tourGo(d) {
+    var n = ui.tour.step + d;
+    while (n > 0 && n < TOUR.length && TOUR[n].at && !tourTarget(n)) n += d;   /* skip what is not on screen, like the plus with three layers */
+    if (n >= TOUR.length) { tourEnd(); return; }
+    ui.tour.step = Math.max(0, n);
+  }
+  function placeTour(t) {
+    var root = $('tour');
+    if (!ui.tour) { if (root) root.remove(); return; }
+    if (!root) {
+      root = document.createElement('div'); root.id = 'tour';
+      root.style.cssText = 'position:absolute;left:0;top:0;width:960px;height:640px;z-index:70;overflow:hidden';
+      root.innerHTML = '<div id="tourspot" style="position:absolute;left:480px;top:320px;width:0;height:0;border-radius:18px;pointer-events:none;transition:left .35s cubic-bezier(.3,.7,.3,1),top .35s cubic-bezier(.3,.7,.3,1),width .35s cubic-bezier(.3,.7,.3,1),height .35s cubic-bezier(.3,.7,.3,1)"></div>' +
+        '<div id="tourcard" role="dialog" aria-live="polite" style="position:absolute;left:330px;top:250px;width:300px;transition:left .35s cubic-bezier(.3,.7,.3,1),top .35s cubic-bezier(.3,.7,.3,1)"></div>';
+      $('plugin').appendChild(root);
+    }
+    var step = ui.tour.step, info = TOUR[step], el = tourTarget(step), spot = $('tourspot'), card = $('tourcard');
+    var dim = t.dark ? 'rgba(14,8,46,0.62)' : 'rgba(50,40,100,0.42)';
+    spot.style.boxShadow = '0 0 0 2000px ' + dim + (el ? ', 0 0 0 3px ' + t.accent + ', 0 0 26px 4px ' + t.accent : '');
+    var r = null;
+    if (el) {
+      var pr = $('plugin').getBoundingClientRect(), k = pr.width / 960, b = el.getBoundingClientRect();
+      r = { x: (b.left - pr.left) / k - 6, y: (b.top - pr.top) / k - 6, w: b.width / k + 12, h: b.height / k + 12 };
+      spot.style.left = r.x + 'px'; spot.style.top = r.y + 'px'; spot.style.width = r.w + 'px'; spot.style.height = r.h + 'px';
+    } else { spot.style.left = '480px'; spot.style.top = '320px'; spot.style.width = '0px'; spot.style.height = '0px'; }
+    var last = step === TOUR.length - 1;
+    var dots = TOUR.map(function (x, i) { return '<span style="width:' + (i === step ? 14 : 6) + 'px;height:6px;border-radius:3px;background:' + (i === step ? t.accentLine : t.ctrlBorder) + '"></span>'; }).join('');
+    card.style.cssText += ';' + panelStyle(t) + 'background-color:' + (t.dark ? 'rgba(42,34,112,0.97)' : 'rgba(251,247,241,0.98)') + ';color:' + t.fg + ';font-family:' + t.body + ';padding:16px 18px;box-sizing:border-box;display:flex;flex-direction:column;gap:8px;box-shadow:0 18px 48px rgba(18,10,58,0.45)';
+    card.innerHTML = '<div style="font-family:' + t.display + ';font-weight:' + t.displayWeight + ';font-size:28px;line-height:1">' + info.title + '</div>' +
+      '<div style="font-size:13px;font-weight:700;line-height:1.45;color:' + t.sub + '">' + info.text + '</div>' +
+      '<div style="display:flex;align-items:center;gap:6px;margin-top:4px"><div style="flex:1;display:flex;gap:4px">' + dots + '</div>' +
+      (last ? '' : '<button type="button" data-act="tour-skip" style="height:30px;padding:0 10px;border:none;background:transparent;color:' + t.sub + ';font-size:12px;font-weight:800">Skip</button>') +
+      (step > 0 ? button(t, 'Back', 'ghost', 'data-act="tour-back"', 30) : '') + button(t, last ? 'Let\'s play' : step === 0 ? 'Start' : 'Next', 'primary', 'data-act="tour-next"', 30) + '</div>';
+    var ch = card.offsetHeight, x, y;
+    if (!r) { x = 330; y = 320 - ch / 2; }
+    else {
+      x = Math.max(14, Math.min(960 - 314, r.x + r.w / 2 - 150));
+      y = r.y + r.h + 12 + ch < 628 ? r.y + r.h + 12 : r.y - 12 - ch >= 12 ? r.y - 12 - ch : Math.max(12, Math.min(628 - ch, r.y + r.h / 2 - ch / 2));
+      /* beside the target when it is too tall to go above or below */
+      if (y !== r.y + r.h + 12 && y !== r.y - 12 - ch) x = r.x + r.w + 14 + 300 <= 950 ? r.x + r.w + 14 : Math.max(14, r.x - 314);
+    }
+    card.style.left = Math.round(x) + 'px'; card.style.top = Math.round(y) + 'px';
   }
 
   /* dragging knobs, faders, pills and envelope points.
@@ -1124,6 +1327,10 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
     drag = null; kick();
   });
   document.addEventListener('keydown', function (e) {
+    if (ui.tour) {
+      if (e.key === 'Escape') tourEnd(); else if (e.key === 'ArrowRight' || e.key === 'Enter') tourGo(1); else if (e.key === 'ArrowLeft') tourGo(-1); else return;
+      e.preventDefault(); render(); return;
+    }
     if (e.key === 'Escape' && (ui.menu || ui.about || ui.picker || ui.combos)) { ui.menu = false; ui.about = false; ui.picker = null; ui.combos = false; render(); return; }
     var el = e.target.closest && e.target.closest('[data-drag]'); if (!el) return;
     var dir = e.key === 'ArrowUp' || e.key === 'ArrowRight' ? 1 : e.key === 'ArrowDown' || e.key === 'ArrowLeft' ? -1 : 0;
@@ -1147,21 +1354,24 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
   var PARAMS = (function () {
     var list = [];
     var knobParam = function (id, key, def) { list.push({ id: id, key: key, def: def, get: function () { return tw(key, def).t; }, set: function (v, now) { var o = tw(key, def); o.t = v; if (now) o.v = v; } }); };
-    LAYERS.forEach(function (d, i) {
+    var switchParam = function (id, sw, def) { list.push({ id: id, get: function () { return (sw in ui.sw ? ui.sw[sw] : def) ? 1 : 0; }, set: function (v, now) { var on = v >= 0.5; ui.sw[sw] = on; var o = tw('s:' + sw, def ? 1 : 0); o.t = on ? 1 : 0; if (now) o.v = o.t; } }); };
+    LAYER_DEFAULTS.forEach(function (d, i) {
       var L = 'l' + (i + 1) + '_';
-      list.push({ id: L + 'on', get: function () { return ui.sw['layer' + i] === false ? 0 : 1; }, set: function (v, now) { var on = v >= 0.5; ui.sw['layer' + i] = on; var o = tw('s:layer' + i, 1); o.t = on ? 1 : 0; if (now) o.v = o.t; } });
-      ['Level', 'Pan', 'Cutoff', 'Reso'].forEach(function (k, j) { knobParam(L + k.toLowerCase(), 'k:L' + i + k, d[4][j]); });
+      switchParam(L + 'on', 'layer' + i, true);
+      LAYER_KNOBS.forEach(function (k, j) { knobParam(L + k.toLowerCase(), 'k:L' + i + k, d.k[j]); });
       ['a', 'd', 's', 'r'].forEach(function (k) {
         var def = ui.layerEnv[i][k], key = 'e:L' + i + ':' + k;
         list.push({ id: L + { a: 'attack', d: 'decay', s: 'sustain', r: 'release' }[k], get: function () { return ui.layerEnv[i][k]; }, set: function (v, now) { ui.layerEnv[i][k] = v; var o = tw(key, def); o.t = v; if (now) o.v = v; } });
       });
-      ['Octave', 'Semi', 'Fine'].forEach(function (k, j) {
+      LAYER_TUNE.forEach(function (k, j) {
         var sid = 'L' + i + k;
-        list.push({ id: L + ['oct', 'semi', 'fine'][j], get: function () { return sid in ui.steps ? ui.steps[sid] : TUNE[i][j]; }, set: function (v) { ui.steps[sid] = Math.round(v); } });
+        list.push({ id: L + ['oct', 'semi', 'fine'][j], get: function () { return ui.steps[sid] || 0; }, set: function (v) { ui.steps[sid] = Math.round(v); } });
       });
     });
-    [['Reverb', 0.7], ['Chorus', 0.35], ['Vibrato', 0.15], ['Glide', 0], ['Volume', 0.8]].forEach(function (g) { knobParam(g[0].toLowerCase(), 'k:G' + g[0], g[1]); });
+    GLOBALS.forEach(function (g) { knobParam(g[0].toLowerCase(), 'k:G' + g[0], g[1]); });
     list.push({ id: 'mono', get: function () { return ui.mono ? 1 : 0; }, set: function (v) { ui.mono = v >= 0.5; } });
+    list.push({ id: 'layers', get: function () { return ui.layers; }, set: function (v) { ui.layers = Math.max(1, Math.min(3, Math.round(v))); } });
+    switchParam('mpe', 'mpe', false);
     return list;
   })();
   var PARAM_BY_ID = {}; PARAMS.forEach(function (p) { PARAM_BY_ID[p.id] = p; });
@@ -1187,7 +1397,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
   function applyState(v) {
     if (!v) return;
     if (v.view) ui.view = v.view;
-    if (v.layerProg) ui.layerProg = v.layerProg.slice();
+    if (v.layerProg) { ui.layerProg = v.layerProg.slice(); envNotches(); }
     if (v.gmProg) ui.gmProg = v.gmProg.slice();
     if (v.kit) ui.kit = v.kit;
     if (v.mute !== undefined) ui.mute = unmask(v.mute);
@@ -1212,7 +1422,6 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
   }
   function applyHeld(list) {
     var all = list.concat(ui.localHeld.filter(function (n) { return list.indexOf(n) < 0; }));
-    all.forEach(function (n) { if (ui.held.indexOf(n) < 0) ui.keyCol[n] = all.indexOf(n); });
     var before = ui.held; ui.held = all;
     before.concat(all).forEach(function (n) { tw('key:' + n, 0).t = all.indexOf(n) >= 0 ? 1 : 0; });
   }
@@ -1223,6 +1432,8 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
       if (m.version) ui.version = m.version;
       if (m.presets) { ui.presets = m.presets; ui.presetIdx = m.presetIndex; ui.presetName = m.presetName || ui.presetName; }
       bridge.state = JSON.stringify(stateSnap()); bridge.ready = true;
+      ui.tourSeen = !!m.tourSeen;
+      if (!ui.tourSeen) tourStart();
       render(); return;
     }
     if (m.type === 'params') { applyParams(m.values, false); kick(); return; }
@@ -1271,6 +1482,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
   }
 
   send('ready');
+  if (!backend) tourStart();
   render();
 })();
 </script>

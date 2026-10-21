@@ -18,14 +18,20 @@ gemi opens in **Synth** mode; the switch in the header flips to **GM Player**.
 
 **Synth**
 
-- **Three layers**, each any of the 128 GM sounds, played together from one key. MIDI on any
-  channel plays them.
-- Per layer: on/off, **level, pan, cutoff, resonance**, an **ADSR envelope** (drag the points or
+- Starts with **one layer**; the big plus adds up to **three**, all played together from one key.
+  MIDI on any channel plays them. Each layer can be switched off or removed.
+- Each layer is any of the 128 GM sounds: step through them with the arrows, or open the picker
+  (by family, or the full list with a tag to jump to each family). A new sound brings an envelope
+  that suits it (pads swell, plucks and drums start at once), and the envelope's notch sits there.
+- Per layer: **level, pan, cutoff, resonance**, an **ADSR envelope** (drag the points or
   the A/D/S/R pills), and **octave, semitone and fine** tuning. The filter and envelope replace each
   sound's own, so the values shown are the values you hear.
+- **MPE**: channel 1 is the master channel; channels 2 to 16 each play one note with its own pitch
+  bend (48 semitones), pressure (opens the filter, swells the level) and slide (CC74, sweeps the
+  filter).
 - Global **reverb, chorus, vibrato** (the mod wheel adds to it), **glide** and **volume**, and
   **Poly / Mono**.
-- **Combos**: ten factory combos, plus your own. Save writes them to
+- **Combos**: eleven factory combos, plus your own. Save writes them to
   `~/Library/Audio/Presets/Opalite Audio/gemi` (macOS).
 - Every knob, switch and stepper is a host parameter: automatable, and saved with the project.
   Knobs snap to a notch at their default; double-click resets, Shift-drag skips the notch,
@@ -40,9 +46,13 @@ gemi opens in **Synth** mode; the switch in the header flips to **GM Player**.
   plays the selected channel), **GM Reset** and **All Sound Off**. Drum kits on channel 10.
 - Program change, bank select (GS variations), pitch bend, mod wheel, volume, pan, expression,
   sustain, reverb/chorus sends (CC91/CC93), RPNs and GM/GS SysEx resets all work.
+- **Multi-output**: besides the main stereo output, each channel has its own stereo output
+  ("Ch 1" to "Ch 16", with its own reverb and chorus). Load gemi as a multi-output instrument and
+  any output the host turns on carries that channel instead of the main mix.
 
 **Everywhere**: a playable on-screen keyboard that also lights up with incoming notes; light
-(Cloud Meadow) and dark (Starfield Dusk) themes; window sizes 75 to 150 %; Reduce motion; About.
+(Cloud Meadow) and dark (Starfield Dusk) themes; window sizes 75 to 150 %; Reduce motion; About;
+a short tutorial on first open (again any time from the gemi menu).
 
 ## How it works
 

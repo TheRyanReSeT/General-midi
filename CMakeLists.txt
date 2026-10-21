@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
 
 # Hosts see the numeric version; gemi shows it as 0.<minor>a (0.1.0 -> "0.1a").
-project(GMSynth VERSION 0.1.0 LANGUAGES C CXX)
+project(GMSynth VERSION 0.2.0 LANGUAGES C CXX)
 set(GEMI_DISPLAY_VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}a")
 
 #==============================================================================

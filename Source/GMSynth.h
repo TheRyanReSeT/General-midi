@@ -46,7 +46,9 @@ struct PresetInfo
 class GMSynth
 {
 public:
-    static constexpr int numChannels = 16;
+    static constexpr int numChannels = 16;     // MIDI channels a song can use
+    static constexpr int totalChannels = 64;   // engine channels: the 16 above plus room for MPE layer voices
+    static constexpr int numGroups = 16;       // stereo outputs: engine channel c plays on output c % 16
     static constexpr int drumChannel = 9;  // MIDI channel 10
     static constexpr int drumBank = 128;
 
@@ -65,6 +67,8 @@ public:
     // Real-time safe calls (audio thread):
     void handleMidi (const uint8_t* data, int size);
     void render (float* left, float* right, int numSamples);
+    // Renders each output group, effects included, *adding* into left[g] / right[g] (numGroups pointers each).
+    void renderGroups (float* const* left, float* const* right, int numSamples);
     void selectProgram (int channel, int bank, int program);
     void allSoundsOff();
     void resetToGM();
@@ -78,6 +82,9 @@ public:
 
     // Applies to voices already sounding as well as new ones.
     void setVoiceShape (int channel, const VoiceShape& shape);
+    // Changes only the filter part of the channel's shape (for fast per-note expression).
+    void setFilter (int channel, float cents, float q);
+    void setPitchBendRange (int channel, int semitones);
     void setFineTune (int channel, float cents);
     // Glide time in milliseconds, 0 = off.
     void setPortamento (int channel, int milliseconds);
@@ -89,8 +96,8 @@ public:
 
     // Mix settings (thread safe).
     void setGain (float linearGain);
-    void setReverbLevel (float level);   // 0..1
-    void setChorusLevel (float level);   // 0..1
+    void setReverbLevel (float level);   // 0..1, also sets the room size
+    void setChorusLevel (float level);   // 0..1, also sets the depth
 
     // Every preset in the SoundFont, sorted by bank then program.
     const std::vector<PresetInfo>& getPresets() const { return presets; }
@@ -99,6 +106,8 @@ public:
 private:
     void destroy();
     void applyMixSettings();
+    void applyReverb();
+    void applyChorus();
     void applyShape (int channel, int key, bool newestOnly);
 
     const void* sfData;
@@ -111,7 +120,8 @@ private:
     double currentRate = 0.0;
 
     float gain = 1.0f, reverbLevel = 0.7f, chorusLevel = 0.5f;
-    VoiceShape shapes[numChannels];
+    VoiceShape shapes[totalChannels];
+    std::vector<float*> fxPointers;   // renderGroups scratch, sized once in prepare()
     std::vector<PresetInfo> presets;
 };
 

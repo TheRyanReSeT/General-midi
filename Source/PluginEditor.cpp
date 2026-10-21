@@ -18,6 +18,21 @@ juce::String mimeTypeFor (const juce::String& fileName)
     if (ext == "woff2") return "font/woff2";
     return "application/octet-stream";
 }
+
+// Settings shared by every gemi instance on this computer (not saved with projects).
+juce::PropertiesFile& globalSettings()
+{
+    static juce::PropertiesFile file ([]
+    {
+        juce::PropertiesFile::Options o;
+        o.applicationName = "gemi";
+        o.folderName = "Opalite Audio/gemi";
+        o.filenameSuffix = ".settings";
+        o.osxLibrarySubFolder = "Application Support";
+        return o;
+    }());
+    return file;
+}
 }
 
 GemiEditor::GemiEditor (GemiProcessor& p)
@@ -159,6 +174,7 @@ void GemiEditor::sendInit()
     o->setProperty ("params", juce::var (values));
     o->setProperty ("state", processor.getUiState());
     o->setProperty ("version", GEMI_DISPLAY_VERSION);
+    o->setProperty ("tourSeen", globalSettings().getBoolValue ("tourSeen", false));   // the first-open tutorial
     addPresetList (*o);
     send ("init", o);
     pageReady = true;
@@ -223,6 +239,11 @@ void GemiEditor::handleMessage (const juce::var& m)
     else if (type == "savePreset")
     {
         processor.savePreset (m["name"].toString());
+    }
+    else if (type == "tourSeen")
+    {
+        globalSettings().setValue ("tourSeen", true);
+        globalSettings().saveIfNeeded();
     }
     else if (type == "gmReset")
     {

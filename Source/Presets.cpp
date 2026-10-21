@@ -23,9 +23,14 @@ struct Combo
     Layer layers[numLayers];
     float reverb = 0.70f, chorus = 0.35f, vibrato = 0.15f, glide = 0.0f;
     bool mono = false;
+    int layerCount = numLayers;
 };
 
 const Combo combos[] = {
+    { "Grand Piano",
+      { { 1,  0.80f, 0.50f, 0.90f, 0.10f, 0.00f, 0.90f, 0.25f, 0.15f },
+        { 49, 0.70f, 0.50f, 0.90f, 0.10f, 0.12f, 0.30f, 0.90f, 0.20f },
+        { 90, 0.60f, 0.50f, 0.85f, 0.10f, 0.35f, 0.50f, 0.85f, 0.50f } }, 0.45f, 0.20f, 0.0f, 0.0f, false, 1 },
     { "Aurora Choir",
       { { 53, 0.80f, 0.40f, 0.72f, 0.20f, 0.20f, 0.15f, 0.80f, 0.40f, 0, 0, 0 },
         { 95, 0.60f, 0.60f, 0.55f, 0.35f, 0.55f, 0.40f, 0.65f, 0.80f, 0, 7, 6 },
@@ -87,6 +92,7 @@ juce::var comboData (const Combo& c)
     params->setProperty ("vibrato", c.vibrato);
     params->setProperty ("glide", c.glide);
     params->setProperty ("mono", c.mono ? 1.0f : 0.0f);
+    params->setProperty ("layers", (float) c.layerCount);
 
     auto* obj = new juce::DynamicObject();
     obj->setProperty ("params", juce::var (params));
