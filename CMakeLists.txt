@@ -47,11 +47,10 @@ foreach(opt
         enable-libinstpatch enable-libsndfile enable-midishare enable-network enable-oss
         enable-dsound enable-wasapi enable-waveout enable-winmidi enable-sdl3
         enable-pulseaudio enable-pipewire enable-readline enable-threads enable-openmp
-        enable-systemd enable-coreaudio enable-coremidi enable-framework enable-portaudio)
+        enable-systemd enable-coreaudio enable-coremidi enable-framework enable-portaudio
+        enable-native-dls)
     set(${opt} OFF CACHE BOOL "" FORCE)
 endforeach()
-# DLS support: gemi plays the GS sound set built into macOS (a .dls file) when it is there.
-set(enable-native-dls ON CACHE BOOL "" FORCE)
 
 FetchContent_Declare(fluidsynth
     GIT_REPOSITORY https://github.com/FluidSynth/fluidsynth.git

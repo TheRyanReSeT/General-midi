@@ -85,7 +85,6 @@ int main (int argc, char** argv)
     juce::ScopedJuceInitialiser_GUI juce;
     Rig rig;
     auto& p = rig.p;
-    std::printf ("      sounds: %s\n", p.usingClassicSounds() ? "the system's GS set" : "built-in GeneralUser GS");
 
     // ---- Each sound starts with its own envelope, read from the sound set
     {
@@ -262,27 +261,6 @@ int main (int argc, char** argv)
         }
         std::printf ("      outputs: %d channels, main %.4f, Ch 2 %.4f\n", multi.getTotalNumOutputChannels(), mainPeak, ownPeak);
         check (multi.getTotalNumOutputChannels() == 34 && ownPeak > 0.01f && mainPeak < 1.0e-4f, "GM Player: channel 2 plays on its own output");
-    }
-
-    // ---- A DLS sound set (the format of the Mac's GS sounds) loads and plays
-    if (argc > 2)
-    {
-        setenv ("GEMI_SOUNDSET", argv[2], 1);
-        GemiProcessor dls;
-        unsetenv ("GEMI_SOUNDSET");
-        dls.setPlayConfigDetails (0, 2, rate, block);
-        dls.prepareToPlay (rate, block);
-        juce::AudioBuffer<float> buffer (2, block);
-        float dlsPeak = 0.0f;
-        for (int b = 0; b < 30; ++b)
-        {
-            juce::MidiBuffer midi;
-            if (b == 2) midi.addEvent (juce::MidiMessage::noteOn (1, 60, (juce::uint8) 110), 0);
-            dls.processBlock (buffer, midi);
-            dlsPeak = std::max (dlsPeak, buffer.getMagnitude (0, 0, block));
-        }
-        std::printf ("      DLS: loaded %d, peak %.4f\n", dls.usingClassicSounds() ? 1 : 0, dlsPeak);
-        check (dls.usingClassicSounds() && dlsPeak > 0.001f, "sounds: a DLS sound set loads and plays");
     }
 
     // ---- Saved state survives a reload

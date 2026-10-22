@@ -4,7 +4,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <fstream>
 #include <cstdio>
 #include <cstring>
 
@@ -129,7 +128,6 @@ void silenceFluidLogging()
     fluid_set_log_function (FLUID_DBG, nullptr, nullptr);
     fluid_set_log_function (FLUID_INFO, nullptr, nullptr);
     fluid_set_log_function (FLUID_WARN, nullptr, nullptr);
-    fluid_set_log_function (FLUID_ERR, nullptr, nullptr);   // e.g. each loader that turns down a DLS file before the DLS loader takes it
 }
 
 } // namespace
@@ -200,15 +198,7 @@ bool GMSynth::prepare (double sampleRate)
     fluid_sfloader_set_callbacks (loader, memOpen, memRead, memSeek, memTell, memClose);
     fluid_synth_add_sfloader (synth, loader);
 
-    // The preferred file (a path) goes past the memory loader to FluidSynth's file loaders, DLS included.
-    usingPreferred = false;
-    if (! preferredPath.empty() && std::ifstream (preferredPath).good())
-    {
-        sfontId = fluid_synth_sfload (synth, preferredPath.c_str(), 1);
-        usingPreferred = sfontId != FLUID_FAILED;
-    }
-    if (! usingPreferred)
-        sfontId = fluid_synth_sfload (synth, makeMemoryFileName (sfData, sfSize).c_str(), 1);
+    sfontId = fluid_synth_sfload (synth, makeMemoryFileName (sfData, sfSize).c_str(), 1);
     if (sfontId == FLUID_FAILED)
     {
         destroy();

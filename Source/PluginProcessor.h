@@ -62,7 +62,6 @@ public:
 
     // Each layer's sound's own envelope, in knob units ([{ a, d, s, r }, ...]), for the UI to show.
     juce::var getOwnEnvelopes();
-    bool usingClassicSounds() const { return synth.usingPreferredSoundSet(); }
     void requestGMReset() { pendingReset = true; }
     void requestPanic()   { pendingPanic = true; }
 

@@ -175,7 +175,6 @@ void GemiEditor::sendInit()
     o->setProperty ("state", processor.getUiState());
     o->setProperty ("version", GEMI_DISPLAY_VERSION);
     o->setProperty ("tourSeen", globalSettings().getBoolValue ("tourSeen", false));   // the first-open tutorial
-    o->setProperty ("soundSet", processor.usingClassicSounds() ? "classic" : "generaluser");
     o->setProperty ("ownEnv", processor.getOwnEnvelopes());
     lastProgs = juce::JSON::toString (processor.getUiState()["layerProg"]);
     addPresetList (*o);

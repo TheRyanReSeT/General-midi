@@ -217,7 +217,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
   var s = {};   /* flattened view of st for the current mode, rebuilt on every render */
 
   var ui = {
-    tab: 'plugin', view: 'synth', layerOn: [true, true, true], ch: 1, follow: true, mono: false, gmTip: true, mute: {}, solo: {}, gmProg: [1, 34, 49, 26, 57, 74, 5, 82, 89, 0, 12, 66, 53, 123, 128, 99], kit: 1, layerProg: [1, 49, 90], layers: 1, picker: null, ownEnv: [{}, {}, {}], soundSet: 'classic',
+    tab: 'plugin', view: 'synth', layerOn: [true, true, true], ch: 1, follow: true, mono: false, gmTip: true, mute: {}, solo: {}, gmProg: [1, 34, 49, 26, 57, 74, 5, 82, 89, 0, 12, 66, 53, 123, 128, 99], kit: 1, layerProg: [1, 49, 90], layers: 1, picker: null, ownEnv: [{}, {}, {}],
     held: [], localHeld: [], chActive: [], voices: 0, version: '0.2a', presets: [], presetIdx: 0, presetName: 'Grand Piano', combos: false,
     vals: {}, sw: {}, steps: {}, tw: {}, pops: {}, menu: false, about: false, size: 1, tipSpec: null, tour: null, tourSeen: false,
     env: { a: 0.35, d: 0.45, s: 0.65, r: 0.55 },
@@ -800,7 +800,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
       '<div role="dialog" aria-label="About gemi" style="' + popIn('about') + panelStyle(t) + (t.frost ? 'background-color:' + (t.dark ? 'rgba(42,34,112,0.94)' : 'rgba(251,247,241,0.96)') + ';' : '') + 'color:' + t.fg + ';width:380px;padding:24px 26px;display:flex;flex-direction:column;gap:10px;box-shadow:0 24px 60px rgba(18,10,58,0.45)">' +
       '<div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:' + t.display + ';font-weight:' + t.displayWeight + ';font-size:' + Math.round(t.wordSize * 1.1) + 'px;line-height:1">gemi</span><span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:999px;background:' + t.accent + ';color:' + t.accentInk + '">v' + esc(ui.version) + '</span></div>' +
       '<div style="font-size:13px;font-weight:800">by Opalite Audio</div>' +
-      '<div style="font-size:12px;font-weight:700;line-height:1.5;color:' + t.sub + '">' + (ui.soundSet === 'classic' ? 'Sounds: the Roland GS sound set built into macOS.<br>' : 'Sounds: GeneralUser GS by S. Christian Collins.<br>') + 'Engine: FluidSynth (LGPL-2.1), included as a replaceable library.<br>Fonts: Gaegu and Nunito (SIL Open Font License).<br>Built with JUCE. VST is a trademark of Steinberg Media Technologies GmbH.<br>Full licences are in the plugin bundle.</div>' +
+      '<div style="font-size:12px;font-weight:700;line-height:1.5;color:' + t.sub + '">' + 'Sounds: GeneralUser GS by S. Christian Collins.<br>' + 'Engine: FluidSynth (LGPL-2.1), included as a replaceable library.<br>Fonts: Gaegu and Nunito (SIL Open Font License).<br>Built with JUCE. VST is a trademark of Steinberg Media Technologies GmbH.<br>Full licences are in the plugin bundle.</div>' +
       '<div style="display:flex;justify-content:flex-end;margin-top:6px">' + button(t, 'Close', 'primary', 'data-act="about-close"') + '</div></div></div>';
   }
   /* the view switch stays put: what sits beside it gets the same width in both views */
@@ -1150,7 +1150,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
   /* ---------- tutorial: a short tour on first open, again from the gemi menu ---------- */
   var TOUR = [
     { title: 'Welcome to gemi', text: 'Every General MIDI sound in one plugin. Here is a quick tour; it takes under a minute.' },
-    { at: 'pick0', title: 'Choose a sound', text: 'Click the name to browse all 128 classic General MIDI sounds, with a tag to jump to each family. The arrows step to the previous or next sound.' },
+    { at: 'pick0', title: 'Choose a sound', text: 'Click the name to browse all 128 General MIDI sounds, with a tag to jump to each family. The arrows step to the previous or next sound.' },
     { at: 'add', title: 'Stack up to three layers', text: 'Point at the right edge and click the plus to add a layer. Every key you play sounds all your layers together. A layer\'s switch mutes it; the cross removes it.' },
     { at: 'knobs0', title: 'Shape the sound', text: 'Drag a knob up or down. It clicks into a notch at its default: hold Shift to glide past, or Cmd for fine moves. Double-click resets.' },
     { at: 'env0', title: 'The envelope', text: 'How each note starts, holds and fades. It starts as the sound\'s own; drag the points or the A, D, S and R values to make it yours, and click Sound\'s own to go back.' },
@@ -1422,7 +1422,6 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
       if (m.presets) { ui.presets = m.presets; ui.presetIdx = m.presetIndex; ui.presetName = m.presetName || ui.presetName; }
       bridge.state = JSON.stringify(stateSnap()); bridge.ready = true;
       ui.tourSeen = !!m.tourSeen;
-      if (m.soundSet) ui.soundSet = m.soundSet;
       if (m.ownEnv) { ui.ownEnv = m.ownEnv; envNotches(); }
       if (!ui.tourSeen) tourStart();
       render(); return;

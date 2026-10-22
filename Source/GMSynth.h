@@ -57,14 +57,8 @@ public:
     static constexpr int drumChannel = 9;  // MIDI channel 10
     static constexpr int drumBank = 128;
 
-    // `soundFontData` must stay valid for the lifetime of this object. It is the fallback sound set,
-    // used when no preferred sound set file is given or it cannot be loaded.
+    // `soundFontData` must stay valid for the lifetime of this object.
     GMSynth (const void* soundFontData, size_t soundFontSize);
-
-    // A SoundFont or DLS file to play instead of the built-in sounds. Call before prepare().
-    void setPreferredSoundSet (const std::string& path) { preferredPath = path; }
-    // True when the preferred file is the one playing.
-    bool usingPreferredSoundSet() const { return usingPreferred; }
 
     // The volume envelope a program plays at middle C, from the sound set itself: attack, decay and
     // release in seconds, sustain as a level 0..1. Message thread; results are cached.
@@ -137,8 +131,6 @@ private:
     float gain = 1.0f, reverbLevel = 0.7f, chorusLevel = 0.5f;
     VoiceShape shapes[totalChannels];
     std::vector<float*> fxPointers;   // renderGroups scratch, sized once in prepare()
-    std::string preferredPath;
-    bool usingPreferred = false;
     std::mutex probeLock;
     std::map<int, std::array<float, 4>> ownEnvelopes;
     std::vector<PresetInfo> presets;

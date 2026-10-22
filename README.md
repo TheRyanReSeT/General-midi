@@ -64,8 +64,7 @@ a short tutorial on first open (again any time from the gemi menu).
 | [JUCE 9](https://juce.com) | Plugin framework (VST3, AU) | AGPLv3 or JUCE commercial licence |
 | VST3 SDK (bundled with JUCE) | VST3 plugin interface | MIT |
 | [FluidSynth 2.5.7](https://www.fluidsynth.org) | The SoundFont engine: the reference SF2 player, with reverb, chorus and full modulator support | LGPL-2.1 |
-| macOS's built-in GS sound set (`gs_instruments.dls`, Roland's sounds licensed to Apple) | The sounds gemi plays: read from the user's own Mac at runtime, never copied or shipped | Apple's; see "Before you sell it" |
-| [GeneralUser GS 2.0.3](https://www.schristiancollins.com/generaluser) by S. Christian Collins | Fallback sound bank, embedded in the plugin binary, used only if the Mac's GS set is missing | Free for commercial use, may be bundled in software |
+| [GeneralUser GS 2.0.3](https://www.schristiancollins.com/generaluser) by S. Christian Collins | The 32 MB GM/GS sound bank, embedded in the plugin binary, so gemi sounds the same on every computer | Free for commercial use, may be bundled in software |
 
 FluidSynth is built without glib or audio drivers, as a **shared library shipped inside
 each plugin bundle**. Linking it dynamically is what lets you sell the plugin as closed
@@ -171,17 +170,11 @@ product matters to you.
    be 100% certain of every sample's origin, though nobody has complained since 2000. If
    that risk matters for your product, plan to replace the bank later with samples you own
    or license; the engine plays any SF2.
-5. **The Mac's GS sounds.** gemi plays `/System/Library/Components/CoreAudio.component/Contents/Resources/gs_instruments.dls`
-   from the user's own system and never distributes it. That file is Apple's (Roland's samples,
-   licensed to Apple for macOS), and whether a commercial third-party plugin may play it is not
-   settled: **ask a lawyer before you sell**. If the answer is no, the GeneralUser GS fallback (or a
-   bank you license) can become the default by removing the preferred path in
-   `GemiProcessor::GemiProcessor`.
-6. **VST3.** The SDK bundled with JUCE 9 is MIT licensed, so no Steinberg agreement is
+5. **VST3.** The SDK bundled with JUCE 9 is MIT licensed, so no Steinberg agreement is
    needed. Follow Steinberg's logo/trademark usage guidelines if you show the VST logo.
-7. **Code signing.** macOS: sign the bundles (`codesign --deep` with a Developer ID
+6. **Code signing.** macOS: sign the bundles (`codesign --deep` with a Developer ID
    Application certificate, after the build has copied FluidSynth in), then notarize with
    `notarytool`. This needs an Apple Developer account. Windows: sign the `.vst3` and
    `.exe` with an Authenticode certificate to avoid SmartScreen warnings.
-8. **Pro Tools (optional).** AAX needs Avid's AAX SDK and PACE signing, which JUCE
+7. **Pro Tools (optional).** AAX needs Avid's AAX SDK and PACE signing, which JUCE
    supports; add `AAX` to `GM_FORMATS` once you have them.

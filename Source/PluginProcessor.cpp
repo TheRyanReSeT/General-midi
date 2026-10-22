@@ -3,8 +3,6 @@
 
 #include <BinaryData.h>
 
-#include <cstdlib>
-
 namespace
 {
 constexpr double defaultSampleRate = 44100.0;
@@ -62,13 +60,6 @@ GemiProcessor::GemiProcessor()
     prefs->setProperty ("gmTip", true);
     uiPrefs = juce::var (prefs);
     presetName = presets.all().getFirst().name;
-
-    // The classic GS sounds every Mac has (Roland's, licensed by Apple), read from the user's own system;
-    // the embedded GeneralUser GS plays if they are missing. GEMI_SOUNDSET points at another file (tests).
-    if (const char* custom = std::getenv ("GEMI_SOUNDSET"))
-        synth.setPreferredSoundSet (custom);
-    else
-        synth.setPreferredSoundSet ("/System/Library/Components/CoreAudio.component/Contents/Resources/gs_instruments.dls");
 
     // Load the sounds straight away; prepareToPlay() reloads only if the rate differs.
     synth.prepare (defaultSampleRate);
