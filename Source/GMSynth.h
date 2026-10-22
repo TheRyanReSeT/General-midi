@@ -4,7 +4,10 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <array>
 #include <cstring>
+#include <map>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -19,6 +22,8 @@ namespace gm
 struct VoiceShape
 {
     bool enabled = false;
+    bool envelope = true;           // override the volume envelope (false: the sound's own)
+    bool filter = true;             // override the filter (false: the sound's own)
     float filterCents = 13500.0f;   // absolute cutoff in cents (13500 = fully open)
     float filterQ = 0.0f;           // resonance in centibels
     float attack = -12000.0f;       // envelope times in timecents
@@ -30,7 +35,7 @@ struct VoiceShape
     bool operator== (const VoiceShape& o) const
     {
         auto same = [] (float x, float y) { return std::memcmp (&x, &y, sizeof (float)) == 0; };
-        return enabled == o.enabled && same (filterCents, o.filterCents) && same (filterQ, o.filterQ) && same (attack, o.attack)
+        return enabled == o.enabled && envelope == o.envelope && filter == o.filter && same (filterCents, o.filterCents) && same (filterQ, o.filterQ) && same (attack, o.attack)
             && same (decay, o.decay) && same (sustain, o.sustain) && same (release, o.release);
     }
     bool operator!= (const VoiceShape& o) const { return ! (*this == o); }
@@ -52,8 +57,18 @@ public:
     static constexpr int drumChannel = 9;  // MIDI channel 10
     static constexpr int drumBank = 128;
 
-    // `soundFontData` must stay valid for the lifetime of this object.
+    // `soundFontData` must stay valid for the lifetime of this object. It is the fallback sound set,
+    // used when no preferred sound set file is given or it cannot be loaded.
     GMSynth (const void* soundFontData, size_t soundFontSize);
+
+    // A SoundFont or DLS file to play instead of the built-in sounds. Call before prepare().
+    void setPreferredSoundSet (const std::string& path) { preferredPath = path; }
+    // True when the preferred file is the one playing.
+    bool usingPreferredSoundSet() const { return usingPreferred; }
+
+    // The volume envelope a program plays at middle C, from the sound set itself: attack, decay and
+    // release in seconds, sustain as a level 0..1. Message thread; results are cached.
+    bool getOwnEnvelope (int program, float& attack, float& decay, float& sustain, float& release);
     ~GMSynth();
 
     GMSynth (const GMSynth&) = delete;
@@ -122,6 +137,10 @@ private:
     float gain = 1.0f, reverbLevel = 0.7f, chorusLevel = 0.5f;
     VoiceShape shapes[totalChannels];
     std::vector<float*> fxPointers;   // renderGroups scratch, sized once in prepare()
+    std::string preferredPath;
+    bool usingPreferred = false;
+    std::mutex probeLock;
+    std::map<int, std::array<float, 4>> ownEnvelopes;
     std::vector<PresetInfo> presets;
 };
 

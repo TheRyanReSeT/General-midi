@@ -40,7 +40,7 @@ private:
 
     std::map<juce::String, float> lastSent;   // parameter values the page already has
     std::set<juce::String> gestures;          // parameters the page is dragging
-    juce::String lastHeld;
+    juce::String lastHeld, lastProgs;
     uint32_t lastActive = 0xffffffff;
     int lastVoices = -1;
 

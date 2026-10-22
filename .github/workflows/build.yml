@@ -23,7 +23,7 @@ jobs:
         run: ./build/gm_render build/gm_tour.wav
 
       - name: Test plugin behaviour (synth layers, GM Player, combos, saved state)
-        run: ./build/gemi_selftest build/selftest.wav
+        run: ./build/gemi_selftest build/selftest.wav build/_deps/fluidsynth-src/sf2/VintageDreamsWaves-v2.dls
 
       - name: Collect plugins
         run: |

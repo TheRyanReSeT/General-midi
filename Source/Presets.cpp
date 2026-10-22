@@ -24,13 +24,14 @@ struct Combo
     float reverb = 0.70f, chorus = 0.35f, vibrato = 0.15f, glide = 0.0f;
     bool mono = false;
     int layerCount = numLayers;
+    bool ownEnvelopes = false;   // play each sound's own envelope instead of the ADSR values
 };
 
 const Combo combos[] = {
     { "Grand Piano",
-      { { 1,  0.80f, 0.50f, 0.90f, 0.10f, 0.00f, 0.90f, 0.25f, 0.15f },
-        { 49, 0.70f, 0.50f, 0.90f, 0.10f, 0.12f, 0.30f, 0.90f, 0.20f },
-        { 90, 0.60f, 0.50f, 0.85f, 0.10f, 0.35f, 0.50f, 0.85f, 0.50f } }, 0.45f, 0.20f, 0.0f, 0.0f, false, 1 },
+      { { 1,  0.80f, 0.50f, 1.00f, 0.00f, 0.00f, 0.90f, 0.25f, 0.15f },
+        { 49, 0.70f, 0.50f, 1.00f, 0.00f, 0.12f, 0.30f, 0.90f, 0.20f },
+        { 90, 0.60f, 0.50f, 1.00f, 0.00f, 0.35f, 0.50f, 0.85f, 0.50f } }, 0.45f, 0.20f, 0.0f, 0.0f, false, 1, true },
     { "Aurora Choir",
       { { 53, 0.80f, 0.40f, 0.72f, 0.20f, 0.20f, 0.15f, 0.80f, 0.40f, 0, 0, 0 },
         { 95, 0.60f, 0.60f, 0.55f, 0.35f, 0.55f, 0.40f, 0.65f, 0.80f, 0, 7, 6 },
@@ -82,6 +83,7 @@ juce::var comboData (const Combo& c)
         const auto& L = c.layers[l];
         auto set = [&] (const char* suffix, float v) { params->setProperty (layerId (l, suffix), v); };
         set ("on", L.on ? 1.0f : 0.0f);
+        set ("ownenv", c.ownEnvelopes ? 1.0f : 0.0f);
         set ("level", L.level); set ("pan", L.pan); set ("cutoff", L.cutoff); set ("reso", L.reso);
         set ("attack", L.attack); set ("decay", L.decay); set ("sustain", L.sustain); set ("release", L.release);
         set ("oct", (float) L.octave); set ("semi", (float) L.semi); set ("fine", (float) L.fine);

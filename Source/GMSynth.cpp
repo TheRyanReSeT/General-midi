@@ -3,6 +3,8 @@
 #include <fluidsynth.h>
 
 #include <algorithm>
+#include <cmath>
+#include <fstream>
 #include <cstdio>
 #include <cstring>
 
@@ -127,6 +129,7 @@ void silenceFluidLogging()
     fluid_set_log_function (FLUID_DBG, nullptr, nullptr);
     fluid_set_log_function (FLUID_INFO, nullptr, nullptr);
     fluid_set_log_function (FLUID_WARN, nullptr, nullptr);
+    fluid_set_log_function (FLUID_ERR, nullptr, nullptr);   // e.g. each loader that turns down a DLS file before the DLS loader takes it
 }
 
 } // namespace
@@ -161,6 +164,9 @@ bool GMSynth::prepare (double sampleRate)
     if (synth != nullptr && sampleRate == currentRate)
         return true;
 
+    const std::lock_guard<std::mutex> lock (probeLock);
+    ownEnvelopes.clear();
+
     // Keep the channel programs across a sample-rate change.
     int savedBank[numChannels], savedProgram[numChannels];
     const bool hadSynth = synth != nullptr;
@@ -194,7 +200,15 @@ bool GMSynth::prepare (double sampleRate)
     fluid_sfloader_set_callbacks (loader, memOpen, memRead, memSeek, memTell, memClose);
     fluid_synth_add_sfloader (synth, loader);
 
-    sfontId = fluid_synth_sfload (synth, makeMemoryFileName (sfData, sfSize).c_str(), 1);
+    // The preferred file (a path) goes past the memory loader to FluidSynth's file loaders, DLS included.
+    usingPreferred = false;
+    if (! preferredPath.empty() && std::ifstream (preferredPath).good())
+    {
+        sfontId = fluid_synth_sfload (synth, preferredPath.c_str(), 1);
+        usingPreferred = sfontId != FLUID_FAILED;
+    }
+    if (! usingPreferred)
+        sfontId = fluid_synth_sfload (synth, makeMemoryFileName (sfData, sfSize).c_str(), 1);
     if (sfontId == FLUID_FAILED)
     {
         destroy();
@@ -235,6 +249,9 @@ void GMSynth::applyMixSettings()
         return;
 
     fluid_synth_set_gain (synth, baseGain * gain);
+    fluid_synth_set_chorus_group_nr (synth, -1, 3);
+    fluid_synth_set_chorus_group_speed (synth, -1, 0.4);
+    fluid_synth_set_chorus_group_depth (synth, -1, 12.0);
     applyReverb();
     applyChorus();
 }
@@ -248,12 +265,10 @@ void GMSynth::applyReverb()
     fluid_synth_set_reverb_group_level (synth, -1, std::min (1.0, reverbLevel * 1.3));
 }
 
-// The Chorus knob deepens the sweep as well as raising the level.
+// Only the chorus level follows the knob: changing its depth or voice count while it runs restarts the
+// delay lines, which clicks. Those are set once, in applyMixSettings().
 void GMSynth::applyChorus()
 {
-    fluid_synth_set_chorus_group_nr (synth, -1, 3);
-    fluid_synth_set_chorus_group_speed (synth, -1, 0.4);
-    fluid_synth_set_chorus_group_depth (synth, -1, 4.0 + 14.0 * chorusLevel);
     fluid_synth_set_chorus_group_level (synth, -1, chorusLevel * 6.0);
 }
 
@@ -436,8 +451,9 @@ void GMSynth::applyShape (int channel, int key, bool newestOnly)
                 newest = std::max (newest, fluid_voice_get_id (voices[i]));
 
     const auto& s = shapes[channel];
-    const struct { int gen; float value; } gens[] = {
-        { GEN_FILTERFC, s.filterCents }, { GEN_FILTERQ, s.filterQ },
+    struct Gen { int gen; float value; };
+    const Gen filterGens[] = { { GEN_FILTERFC, s.filterCents }, { GEN_FILTERQ, s.filterQ } };
+    const Gen envelopeGens[] = {
         { GEN_VOLENVDELAY, -12000.0f }, { GEN_VOLENVHOLD, -12000.0f },
         { GEN_KEYTOVOLENVHOLD, 0.0f }, { GEN_KEYTOVOLENVDECAY, 0.0f },
         { GEN_VOLENVATTACK, s.attack }, { GEN_VOLENVDECAY, s.decay },
@@ -450,11 +466,9 @@ void GMSynth::applyShape (int channel, int key, bool newestOnly)
             continue;
         if (newestOnly && (fluid_voice_get_key (v) != key || fluid_voice_get_id (v) != newest))
             continue;
-        for (const auto& g : gens)
-        {
-            fluid_voice_gen_set (v, g.gen, g.value);
-            fluid_voice_update_param (v, g.gen);
-        }
+        auto set = [v] (const Gen& g) { fluid_voice_gen_set (v, g.gen, g.value); fluid_voice_update_param (v, g.gen); };
+        if (s.filter)   for (const auto& g : filterGens) set (g);
+        if (s.envelope) for (const auto& g : envelopeGens) set (g);
     }
 }
 
@@ -465,7 +479,7 @@ void GMSynth::setFilter (int channel, float cents, float q)
     if (s.filterCents == cents && s.filterQ == q) return;
     s.filterCents = cents;
     s.filterQ = q;
-    if (synth == nullptr || ! s.enabled) return;
+    if (synth == nullptr || ! s.enabled || ! s.filter) return;
 
     constexpr int maxVoices = 256;
     fluid_voice_t* voices[maxVoices + 1] = {};
@@ -514,6 +528,53 @@ void GMSynth::setMonoChannels (int count)
     fluid_synth_set_basic_channel (synth, count, FLUID_CHANNEL_MODE_OMNION_POLY, 0);
     for (int ch = 0; ch < count; ++ch)
         fluid_synth_set_legato_mode (synth, ch, FLUID_CHANNEL_LEGATO_MODE_MULTI_RETRIGGER);
+}
+
+// Plays the program silently on the last engine channel (never used for notes) and reads the envelope
+// its voices start with.
+bool GMSynth::getOwnEnvelope (int program, float& attack, float& decay, float& sustain, float& release)
+{
+    const std::lock_guard<std::mutex> lock (probeLock);
+    if (synth == nullptr) return false;
+
+    auto found = ownEnvelopes.find (program);
+    if (found == ownEnvelopes.end())
+    {
+        const int ch = totalChannels - 1;
+        fluid_synth_cc (synth, ch, 7, 0);
+        fluid_synth_bank_select (synth, ch, 0);
+        fluid_synth_program_change (synth, ch, program & 127);
+        fluid_synth_noteon (synth, ch, 60, 100);
+
+        constexpr int maxVoices = 256;
+        fluid_voice_t* voices[maxVoices + 1] = {};
+        fluid_synth_get_voicelist (synth, voices, maxVoices, -1);
+        std::array<float, 4> env { -12000.0f, -12000.0f, 0.0f, -12000.0f };
+        bool any = false;
+        for (int i = 0; voices[i] != nullptr; ++i)
+        {
+            if (fluid_voice_get_channel (voices[i]) != ch) continue;
+            // Of the note's voices, keep the slowest of each stage: that is what you hear.
+            const float a = fluid_voice_gen_get (voices[i], GEN_VOLENVATTACK);
+            const float d = fluid_voice_gen_get (voices[i], GEN_VOLENVDECAY);
+            const float s = fluid_voice_gen_get (voices[i], GEN_VOLENVSUSTAIN);
+            const float r = fluid_voice_gen_get (voices[i], GEN_VOLENVRELEASE);
+            env = any ? std::array<float, 4> { std::max (env[0], a), std::max (env[1], d), std::min (env[2], s), std::max (env[3], r) }
+                      : std::array<float, 4> { a, d, s, r };
+            any = true;
+        }
+        fluid_synth_all_sounds_off (synth, ch);
+        if (! any) return false;
+        found = ownEnvelopes.emplace (program, env).first;
+    }
+
+    const auto& e = found->second;
+    auto seconds = [] (float timecents) { return timecents <= -11999.0f ? 0.0f : (float) std::pow (2.0, timecents / 1200.0); };
+    attack = seconds (e[0]);
+    decay = seconds (e[1]);
+    sustain = (float) std::pow (10.0, -std::max (0.0f, e[2]) / 200.0);
+    release = seconds (e[3]);
+    return true;
 }
 
 int GMSynth::getActiveVoiceCount() const

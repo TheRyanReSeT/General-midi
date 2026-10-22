@@ -3,6 +3,8 @@
 
 #include <BinaryData.h>
 
+#include <cstdlib>
+
 namespace
 {
 constexpr double defaultSampleRate = 44100.0;
@@ -35,7 +37,7 @@ GemiProcessor::GemiProcessor()
     {
         auto p = [&] (const char* suffix) { return parameters.getRawParameterValue (gemi::layerId (l, suffix)); };
         layerParams[(size_t) l] = { p ("on"), p ("level"), p ("pan"), p ("cutoff"), p ("reso"), p ("attack"),
-                                    p ("decay"), p ("sustain"), p ("release"), p ("oct"), p ("semi"), p ("fine") };
+                                    p ("decay"), p ("sustain"), p ("release"), p ("oct"), p ("semi"), p ("fine"), p ("ownenv") };
         layerProgram[(size_t) l] = gemi::layerDefaults (l).program;
     }
     reverbParam  = parameters.getRawParameterValue ("reverb");
@@ -61,7 +63,14 @@ GemiProcessor::GemiProcessor()
     uiPrefs = juce::var (prefs);
     presetName = presets.all().getFirst().name;
 
-    // Load the SoundFont straight away; prepareToPlay() reloads only if the rate differs.
+    // The classic GS sounds every Mac has (Roland's, licensed by Apple), read from the user's own system;
+    // the embedded GeneralUser GS plays if they are missing. GEMI_SOUNDSET points at another file (tests).
+    if (const char* custom = std::getenv ("GEMI_SOUNDSET"))
+        synth.setPreferredSoundSet (custom);
+    else
+        synth.setPreferredSoundSet ("/System/Library/Components/CoreAudio.component/Contents/Resources/gs_instruments.dls");
+
+    // Load the sounds straight away; prepareToPlay() reloads only if the rate differs.
     synth.prepare (defaultSampleRate);
 }
 
@@ -182,6 +191,9 @@ void GemiProcessor::applySynthSettings (bool force)
 
         gm::VoiceShape shape;
         shape.enabled = true;
+        // Fully open with no resonance leaves the sound's own filter; the own-envelope switch its envelope.
+        shape.filter = P.cutoff->load() < 0.995f || P.reso->load() > 0.005f;
+        shape.envelope = P.ownEnv->load() < 0.5f;
         shape.filterCents = (float) juce::jlimit (1500.0, 13500.0, 1200.0 * std::log2 (gemi::cutoffHz (P.cutoff->load()) / 8.176));
         shape.filterQ = P.reso->load() * 240.0f;
         shape.attack  = (float) toTimecents (gemi::attackSeconds (P.attack->load()));
@@ -564,7 +576,7 @@ void GemiProcessor::renderSpan (juce::AudioBuffer<float>& buffer, int start, int
     for (int g = 0; g < groups; ++g)
     {
         busLeft[g] = -1;
-        if (appliedMode != Mode::gmPlayer) continue;
+        if (appliedMode != Mode::gmPlayer || ! separateOutputs.load()) continue;
         if (auto* bus = getBus (false, g + 1); bus != nullptr && bus->isEnabled() && bus->getNumberOfChannels() == 2)
         {
             const int index = getChannelIndexInProcessBlockBuffer (false, g + 1, 0);
@@ -643,6 +655,7 @@ juce::var GemiProcessor::getUiState() const
     o->setProperty ("solo", (int) soloMask.load());
     o->setProperty ("ch", selectedChannel.load());
     o->setProperty ("follow", followKeyboard.load());
+    o->setProperty ("multiOut", separateOutputs.load());
     const juce::ScopedLock sl (prefsLock);
     for (const auto& key : { "theme", "reduceMotion", "size", "gmTip" })
         o->setProperty (key, uiPrefs[key]);
@@ -664,10 +677,31 @@ void GemiProcessor::setUiState (const juce::var& v)
     if (v.hasProperty ("solo"))   soloMask = (uint32_t) (int) v["solo"];
     if (v.hasProperty ("ch"))     selectedChannel = juce::jlimit (1, 16, (int) v["ch"]);
     if (v.hasProperty ("follow")) followKeyboard = (bool) v["follow"];
+    if (v.hasProperty ("multiOut")) separateOutputs = (bool) v["multiOut"];
     const juce::ScopedLock sl (prefsLock);
     if (auto* prefs = uiPrefs.getDynamicObject())
         for (const auto& key : { "theme", "reduceMotion", "size", "gmTip" })
             if (v.hasProperty (key)) prefs->setProperty (key, v[key]);
+}
+
+juce::var GemiProcessor::getOwnEnvelopes()
+{
+    juce::Array<juce::var> list;
+    for (int l = 0; l < gemi::numLayers; ++l)
+    {
+        auto* o = new juce::DynamicObject();
+        float a = 0, d = 0, s = 1, r = 0;
+        if (synth.getOwnEnvelope (layerProgram[(size_t) l].load() - 1, a, d, s, r))
+        {
+            // In knob units: attack and decay are 0..2 s, release 0..3 s.
+            o->setProperty ("a", juce::jlimit (0.0f, 1.0f, a / 2.0f));
+            o->setProperty ("d", juce::jlimit (0.0f, 1.0f, d / 2.0f));
+            o->setProperty ("s", juce::jlimit (0.0f, 1.0f, s));
+            o->setProperty ("r", juce::jlimit (0.0f, 1.0f, r / 3.0f));
+        }
+        list.add (juce::var (o));
+    }
+    return list;
 }
 
 //==============================================================================
@@ -691,13 +725,14 @@ void GemiProcessor::applyPresetData (const juce::var& data)
     for (const auto& spec : gemi::paramSpecs())
     {
         const juce::String id (spec.id);
-        // Combos saved before layers could be added and removed always used all three.
-        const bool oldCombo = id == "layers" && ! params.hasProperty (spec.id);
+        // Combos saved by 0.1a always used all three layers and their own ADSR values.
+        const bool oldCombo = (id == "layers" || id.endsWith ("_ownenv")) && ! params.hasProperty (spec.id);
         if ((! params.hasProperty (spec.id) && ! oldCombo) || id == "mpe" || id == "volume") continue;
         if (auto* p = parameters.getParameter (spec.id))
         {
+            const float value = oldCombo ? (id == "layers" ? (float) gemi::numLayers : 0.0f) : (float) params[spec.id];
             p->beginChangeGesture();
-            p->setValueNotifyingHost (p->convertTo0to1 (oldCombo ? (float) gemi::numLayers : (float) params[spec.id]));
+            p->setValueNotifyingHost (p->convertTo0to1 (value));
             p->endChangeGesture();
         }
     }

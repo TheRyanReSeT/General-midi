@@ -175,6 +175,9 @@ void GemiEditor::sendInit()
     o->setProperty ("state", processor.getUiState());
     o->setProperty ("version", GEMI_DISPLAY_VERSION);
     o->setProperty ("tourSeen", globalSettings().getBoolValue ("tourSeen", false));   // the first-open tutorial
+    o->setProperty ("soundSet", processor.usingClassicSounds() ? "classic" : "generaluser");
+    o->setProperty ("ownEnv", processor.getOwnEnvelopes());
+    lastProgs = juce::JSON::toString (processor.getUiState()["layerProg"]);
     addPresetList (*o);
     send ("init", o);
     pageReady = true;
@@ -287,6 +290,16 @@ void GemiEditor::timerCallback()
 
     if (processor.takeProgramsChanged())
         sendState();
+
+    // A layer changed sound (from the page, a combo or the host): tell the page that sound's own envelope.
+    const auto progs = juce::JSON::toString (processor.getUiState()["layerProg"]);
+    if (progs != lastProgs)
+    {
+        lastProgs = progs;
+        auto* o = new juce::DynamicObject();
+        o->setProperty ("envs", processor.getOwnEnvelopes());
+        send ("ownEnv", o);
+    }
 
     juce::Array<int> held;
     processor.getHeldNotes (held);

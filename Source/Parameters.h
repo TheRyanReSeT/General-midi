@@ -29,7 +29,9 @@ struct ParamSpec
 inline juce::String layerId (int layer, const char* suffix) { return "l" + juce::String (layer + 1) + "_" + suffix; }
 
 // A fresh layer: gemi starts with layer 1 (a grand piano); layers 2 and 3 start like this when added.
-// These match LAYER_DEFAULTS in UI/index.html, and the envelopes match its suggestions for each sound.
+// These match LAYER_DEFAULTS in UI/index.html. The filter starts fully open (and so leaves the sound's
+// own filter alone) and the envelope starts as the sound's own; the ADSR values here only apply once
+// "ownenv" is turned off.
 struct LayerDefaults
 {
     float level, pan, cutoff, reso, attack, decay, sustain, release;
@@ -40,9 +42,9 @@ struct LayerDefaults
 inline const LayerDefaults& layerDefaults (int layer)
 {
     static const LayerDefaults d[numLayers] = {
-        { 0.80f, 0.50f, 0.90f, 0.10f, 0.00f, 0.90f, 0.25f, 0.15f, 0, 0, 0, 1 },     // Acoustic Grand Piano
-        { 0.70f, 0.50f, 0.90f, 0.10f, 0.12f, 0.30f, 0.90f, 0.20f, 0, 0, 0, 49 },    // String Ensemble 1
-        { 0.60f, 0.50f, 0.85f, 0.10f, 0.35f, 0.50f, 0.85f, 0.50f, 0, 0, 0, 90 } };  // Pad 2 (warm)
+        { 0.80f, 0.50f, 1.00f, 0.00f, 0.00f, 0.90f, 0.25f, 0.15f, 0, 0, 0, 1 },     // Acoustic Grand Piano
+        { 0.70f, 0.50f, 1.00f, 0.00f, 0.12f, 0.30f, 0.90f, 0.20f, 0, 0, 0, 49 },    // String Ensemble 1
+        { 0.60f, 0.50f, 1.00f, 0.00f, 0.35f, 0.50f, 0.85f, 0.50f, 0, 0, 0, 90 } };  // Pad 2 (warm)
     return d[layer];
 }
 
@@ -72,6 +74,7 @@ inline const std::vector<ParamSpec>& paramSpecs()
             add ("decay", "Decay", Kind::knob, d.decay);
             add ("sustain", "Sustain", Kind::knob, d.sustain);
             add ("release", "Release", Kind::knob, d.release);
+            add ("ownenv", "Own Envelope", Kind::toggle, 1.0f);
             add ("oct", "Octave", Kind::stepper, (float) d.octave, -3, 3);
             add ("semi", "Semitones", Kind::stepper, (float) d.semi, -12, 12);
             add ("fine", "Fine", Kind::stepper, (float) d.fine, -50, 50);

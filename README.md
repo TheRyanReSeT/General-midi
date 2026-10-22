@@ -18,11 +18,13 @@ gemi opens in **Synth** mode; the switch in the header flips to **GM Player**.
 
 **Synth**
 
-- Starts with **one layer**; the big plus adds up to **three**, all played together from one key.
+- Starts with **one layer**; the tab on the right edge slides out into a plus that adds up to
+  **three**, all played together from one key.
   MIDI on any channel plays them. Each layer can be switched off or removed.
-- Each layer is any of the 128 GM sounds: step through them with the arrows, or open the picker
-  (by family, or the full list with a tag to jump to each family). A new sound brings an envelope
-  that suits it (pads swell, plucks and drums start at once), and the envelope's notch sits there.
+- Each layer is any of the 128 GM sounds: step through them with the arrows, or open the full list,
+  with a tag to jump to each family. Every sound starts exactly as designed: its own envelope
+  (shown on the envelope display) and its own filter (cutoff open at 20k, resonance 0 %). Touch an
+  ADSR value to set your own; "Sound's own" goes back.
 - Per layer: **level, pan, cutoff, resonance**, an **ADSR envelope** (drag the points or
   the A/D/S/R pills), and **octave, semitone and fine** tuning. The filter and envelope replace each
   sound's own, so the values shown are the values you hear.
@@ -47,8 +49,9 @@ gemi opens in **Synth** mode; the switch in the header flips to **GM Player**.
 - Program change, bank select (GS variations), pitch bend, mod wheel, volume, pan, expression,
   sustain, reverb/chorus sends (CC91/CC93), RPNs and GM/GS SysEx resets all work.
 - **Multi-output**: besides the main stereo output, each channel has its own stereo output
-  ("Ch 1" to "Ch 16", with its own reverb and chorus). Load gemi as a multi-output instrument and
-  any output the host turns on carries that channel instead of the main mix.
+  ("Ch 1" to "Ch 16", with its own reverb and chorus). Everything plays on the main output until
+  **Outputs** is switched to *One per channel*; then each channel plays on its own output wherever
+  the host has that output in use.
 
 **Everywhere**: a playable on-screen keyboard that also lights up with incoming notes; light
 (Cloud Meadow) and dark (Starfield Dusk) themes; window sizes 75 to 150 %; Reduce motion; About;
@@ -61,7 +64,8 @@ a short tutorial on first open (again any time from the gemi menu).
 | [JUCE 9](https://juce.com) | Plugin framework (VST3, AU) | AGPLv3 or JUCE commercial licence |
 | VST3 SDK (bundled with JUCE) | VST3 plugin interface | MIT |
 | [FluidSynth 2.5.7](https://www.fluidsynth.org) | The SoundFont engine: the reference SF2 player, with reverb, chorus and full modulator support | LGPL-2.1 |
-| [GeneralUser GS 2.0.3](https://www.schristiancollins.com/generaluser) by S. Christian Collins | The 32 MB GM/GS sound bank, embedded in the plugin binary | Free for commercial use, may be bundled in software |
+| macOS's built-in GS sound set (`gs_instruments.dls`, Roland's sounds licensed to Apple) | The sounds gemi plays: read from the user's own Mac at runtime, never copied or shipped | Apple's; see "Before you sell it" |
+| [GeneralUser GS 2.0.3](https://www.schristiancollins.com/generaluser) by S. Christian Collins | Fallback sound bank, embedded in the plugin binary, used only if the Mac's GS set is missing | Free for commercial use, may be bundled in software |
 
 FluidSynth is built without glib or audio drivers, as a **shared library shipped inside
 each plugin bundle**. Linking it dynamically is what lets you sell the plugin as closed
@@ -167,11 +171,17 @@ product matters to you.
    be 100% certain of every sample's origin, though nobody has complained since 2000. If
    that risk matters for your product, plan to replace the bank later with samples you own
    or license; the engine plays any SF2.
-5. **VST3.** The SDK bundled with JUCE 9 is MIT licensed, so no Steinberg agreement is
+5. **The Mac's GS sounds.** gemi plays `/System/Library/Components/CoreAudio.component/Contents/Resources/gs_instruments.dls`
+   from the user's own system and never distributes it. That file is Apple's (Roland's samples,
+   licensed to Apple for macOS), and whether a commercial third-party plugin may play it is not
+   settled: **ask a lawyer before you sell**. If the answer is no, the GeneralUser GS fallback (or a
+   bank you license) can become the default by removing the preferred path in
+   `GemiProcessor::GemiProcessor`.
+6. **VST3.** The SDK bundled with JUCE 9 is MIT licensed, so no Steinberg agreement is
    needed. Follow Steinberg's logo/trademark usage guidelines if you show the VST logo.
-6. **Code signing.** macOS: sign the bundles (`codesign --deep` with a Developer ID
+7. **Code signing.** macOS: sign the bundles (`codesign --deep` with a Developer ID
    Application certificate, after the build has copied FluidSynth in), then notarize with
    `notarytool`. This needs an Apple Developer account. Windows: sign the `.vst3` and
    `.exe` with an Authenticode certificate to avoid SmartScreen warnings.
-7. **Pro Tools (optional).** AAX needs Avid's AAX SDK and PACE signing, which JUCE
+8. **Pro Tools (optional).** AAX needs Avid's AAX SDK and PACE signing, which JUCE
    supports; add `AAX` to `GM_FORMATS` once you have them.

@@ -85,6 +85,16 @@ int main (int argc, char** argv)
     juce::ScopedJuceInitialiser_GUI juce;
     Rig rig;
     auto& p = rig.p;
+    std::printf ("      sounds: %s\n", p.usingClassicSounds() ? "the system's GS set" : "built-in GeneralUser GS");
+
+    // ---- Each sound starts with its own envelope, read from the sound set
+    {
+        const auto envs = p.getOwnEnvelopes();
+        const auto piano = envs[0], strings = envs[1];
+        std::printf ("      own envelopes: piano A %.3f D %.3f S %.2f R %.3f, strings A %.3f\n", (double) piano["a"], (double) piano["d"],
+                     (double) piano["s"], (double) piano["r"], (double) strings["a"]);
+        check (piano.hasProperty ("a") && (double) piano["a"] < (double) strings["a"], "own envelope: read per sound (piano starts faster than strings)");
+    }
 
     // ---- Synth mode: starts with one layer, more can be added
     rig.run (0.2);
@@ -110,7 +120,7 @@ int main (int argc, char** argv)
     peak = rig.run (0.4, { { 0, juce::MidiMessage::noteOn (7, 64, (juce::uint8) 100) } });
     check (peak > 0.01f, "synth mode: input on channel 7 also plays the layers");
     rig.run (0.1, { { 0, juce::MidiMessage::noteOff (7, 64) } });
-    rig.run (4.0);
+    for (int i = 0; i < 20 && p.getActiveVoices() > 0; ++i) rig.run (0.5);   // the sounds' own releases
     check (p.getActiveVoices() == 0, "synth mode: everything is silent after the release times");
 
     // Release time comes from the layer envelope: long release keeps sounding, short release stops.
@@ -119,6 +129,7 @@ int main (int argc, char** argv)
     rig.set ("chorus", 0.0f);
     for (int l = 1; l <= 3; ++l)
     {
+        rig.set (("l" + juce::String (l) + "_ownenv").toRawUTF8(), 0.0f);   // use the ADSR values
         rig.set (("l" + juce::String (l) + "_sustain").toRawUTF8(), 1.0f);
         rig.set (("l" + juce::String (l) + "_release").toRawUTF8(), 1.0f);   // 3 s
     }
@@ -237,7 +248,7 @@ int main (int argc, char** argv)
         GemiProcessor multi;
         multi.enableAllBuses();
         multi.prepareToPlay (rate, block);
-        multi.setUiState (juce::JSON::parse (R"({"view":"gm"})"));
+        multi.setUiState (juce::JSON::parse (R"({"view":"gm","multiOut":true})"));
         juce::AudioBuffer<float> buffer (multi.getTotalNumOutputChannels(), block);
         float mainPeak = 0.0f, ownPeak = 0.0f;
         const int own = multi.getChannelIndexInProcessBlockBuffer (false, 2, 0);   // "Ch 2"
@@ -251,6 +262,27 @@ int main (int argc, char** argv)
         }
         std::printf ("      outputs: %d channels, main %.4f, Ch 2 %.4f\n", multi.getTotalNumOutputChannels(), mainPeak, ownPeak);
         check (multi.getTotalNumOutputChannels() == 34 && ownPeak > 0.01f && mainPeak < 1.0e-4f, "GM Player: channel 2 plays on its own output");
+    }
+
+    // ---- A DLS sound set (the format of the Mac's GS sounds) loads and plays
+    if (argc > 2)
+    {
+        setenv ("GEMI_SOUNDSET", argv[2], 1);
+        GemiProcessor dls;
+        unsetenv ("GEMI_SOUNDSET");
+        dls.setPlayConfigDetails (0, 2, rate, block);
+        dls.prepareToPlay (rate, block);
+        juce::AudioBuffer<float> buffer (2, block);
+        float dlsPeak = 0.0f;
+        for (int b = 0; b < 30; ++b)
+        {
+            juce::MidiBuffer midi;
+            if (b == 2) midi.addEvent (juce::MidiMessage::noteOn (1, 60, (juce::uint8) 110), 0);
+            dls.processBlock (buffer, midi);
+            dlsPeak = std::max (dlsPeak, buffer.getMagnitude (0, 0, block));
+        }
+        std::printf ("      DLS: loaded %d, peak %.4f\n", dls.usingClassicSounds() ? 1 : 0, dlsPeak);
+        check (dls.usingClassicSounds() && dlsPeak > 0.001f, "sounds: a DLS sound set loads and plays");
     }
 
     // ---- Saved state survives a reload

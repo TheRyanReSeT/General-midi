@@ -59,6 +59,10 @@ public:
     void setUiState (const juce::var& state);
 
     void queueUiNote (int note, int velocity, bool on);
+
+    // Each layer's sound's own envelope, in knob units ([{ a, d, s, r }, ...]), for the UI to show.
+    juce::var getOwnEnvelopes();
+    bool usingClassicSounds() const { return synth.usingPreferredSoundSet(); }
     void requestGMReset() { pendingReset = true; }
     void requestPanic()   { pendingPanic = true; }
 
@@ -90,6 +94,7 @@ private:
         std::atomic<float>* on; std::atomic<float>* level; std::atomic<float>* pan; std::atomic<float>* cutoff;
         std::atomic<float>* reso; std::atomic<float>* attack; std::atomic<float>* decay; std::atomic<float>* sustain;
         std::atomic<float>* release; std::atomic<float>* oct; std::atomic<float>* semi; std::atomic<float>* fine;
+        std::atomic<float>* ownEnv;
     };
     std::array<LayerParams, gemi::numLayers> layerParams {};
     std::atomic<float>* reverbParam = nullptr;
@@ -156,6 +161,7 @@ private:
     std::atomic<uint32_t> muteMask { 0 }, soloMask { 0 };
     std::atomic<int> selectedChannel { 1 };
     std::atomic<bool> followKeyboard { true };
+    std::atomic<bool> separateOutputs { false };   // GM Player: each channel to its own output
     std::atomic<bool> pendingReset { false }, pendingPanic { false }, programsChanged { false };
     std::atomic<uint32_t> activeChannelMask { 0 };
     std::array<std::atomic<uint32_t>, 4> heldBits {};

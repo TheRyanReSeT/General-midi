@@ -179,10 +179,9 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
 .plug button { font: inherit; }
 .plug .clip { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 [data-drag] { touch-action: none; cursor: ns-resize; }
-.plusorb { transition: transform 0.18s ease; }
+#poverlay > * { pointer-events: auto; }
 .plug [data-act="layer-add"]:active { transform: none; }
-[data-act="layer-add"]:hover .plusorb { transform: scale(1.07); }
-[data-act="layer-add"]:active .plusorb { transform: scale(0.96); }
+#tourcard button { white-space: nowrap; flex: none; }
 </style>
 
 </head>
@@ -218,7 +217,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
   var s = {};   /* flattened view of st for the current mode, rebuilt on every render */
 
   var ui = {
-    tab: 'plugin', view: 'synth', layerOn: [true, true, true], ch: 1, follow: true, mono: false, gmTip: true, mute: {}, solo: {}, gmProg: [1, 34, 49, 26, 57, 74, 5, 82, 89, 0, 12, 66, 53, 123, 128, 99], kit: 1, layerProg: [1, 49, 90], layers: 1, picker: null, pickMode: 'family',
+    tab: 'plugin', view: 'synth', layerOn: [true, true, true], ch: 1, follow: true, mono: false, gmTip: true, mute: {}, solo: {}, gmProg: [1, 34, 49, 26, 57, 74, 5, 82, 89, 0, 12, 66, 53, 123, 128, 99], kit: 1, layerProg: [1, 49, 90], layers: 1, picker: null, ownEnv: [{}, {}, {}], soundSet: 'classic',
     held: [], localHeld: [], chActive: [], voices: 0, version: '0.2a', presets: [], presetIdx: 0, presetName: 'Grand Piano', combos: false,
     vals: {}, sw: {}, steps: {}, tw: {}, pops: {}, menu: false, about: false, size: 1, tipSpec: null, tour: null, tourSeen: false,
     env: { a: 0.35, d: 0.45, s: 0.65, r: 0.55 },
@@ -268,34 +267,8 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
     return { fill: hslHex(h, t.dark ? 85 : 70, t.dark ? 74 : 68), text: t.dark ? hslHex(h, 85, 78) : hslHex(h, 55, 38) };
   }
 
-  /* A suggested envelope for every General MIDI sound, in knob units (A and D x 2 s, S level, R x 3 s):
-     struck and plucked sounds start at once and fade, bowed and blown ones swell a little and hold,
-     pads bloom slowly. Picking a sound for a layer sets its envelope to this, and the envelope's notch sits here. */
-  var ENV_FAMILY = [
-    [0, 0.9, 0.25, 0.15], [0, 0.8, 0, 0.3], [0.01, 0.1, 1, 0.08], [0, 0.9, 0.15, 0.12],
-    [0, 0.6, 0.4, 0.06], [0.06, 0.2, 0.9, 0.15], [0.12, 0.3, 0.9, 0.2], [0.03, 0.25, 0.85, 0.08],
-    [0.03, 0.2, 0.9, 0.06], [0.02, 0.2, 0.9, 0.06], [0, 0.3, 0.8, 0.08], [0.35, 0.5, 0.85, 0.5],
-    [0.15, 0.6, 0.7, 0.5], [0, 0.8, 0.1, 0.15], [0, 0.5, 0, 0.2], [0, 0.5, 1, 0.2]];
-  var ENV_SOUND = {
-    5: [0, 0.8, 0.3, 0.2], 6: [0, 0.8, 0.3, 0.2], 7: [0, 0.6, 0, 0.1], 8: [0, 0.4, 0.2, 0.05],
-    11: [0, 0.9, 0, 0.4], 12: [0, 1, 0, 0.5], 13: [0, 0.3, 0, 0.1], 14: [0, 0.3, 0, 0.1], 15: [0, 1, 0, 0.6],
-    22: [0.03, 0.1, 1, 0.1], 23: [0.02, 0.2, 0.9, 0.08], 24: [0.03, 0.1, 1, 0.1],
-    29: [0, 0.15, 0, 0.05], 30: [0, 0.5, 0.7, 0.12], 31: [0, 0.5, 0.7, 0.12], 32: [0, 0.9, 0, 0.3],
-    36: [0.01, 0.6, 0.6, 0.1], 39: [0, 0.3, 0.7, 0.06], 40: [0, 0.3, 0.7, 0.06],
-    45: [0.05, 0.2, 0.9, 0.15], 46: [0, 0.25, 0, 0.1], 47: [0, 0.9, 0, 0.4], 48: [0, 0.6, 0, 0.4],
-    51: [0.15, 0.3, 0.85, 0.25], 52: [0.15, 0.3, 0.85, 0.25], 53: [0.15, 0.3, 0.9, 0.25], 54: [0.15, 0.3, 0.9, 0.25], 55: [0.1, 0.3, 0.85, 0.25], 56: [0, 0.3, 0, 0.15],
-    61: [0.05, 0.25, 0.85, 0.1], 63: [0.04, 0.3, 0.8, 0.12], 64: [0.04, 0.3, 0.8, 0.12],
-    77: [0.06, 0.2, 0.9, 0.08], 78: [0.04, 0.2, 0.9, 0.08], 80: [0.01, 0.2, 0.9, 0.05],
-    83: [0.01, 0.3, 0.8, 0.08], 84: [0, 0.3, 0.7, 0.1], 86: [0.05, 0.3, 0.85, 0.15],
-    91: [0.05, 0.4, 0.75, 0.25], 94: [0.25, 0.5, 0.7, 0.5], 96: [0.4, 0.5, 0.8, 0.6],
-    99: [0, 0.8, 0.2, 0.5], 101: [0.05, 0.6, 0.7, 0.4], 102: [0.3, 0.6, 0.7, 0.5], 103: [0.1, 0.6, 0.7, 0.6], 104: [0.1, 0.6, 0.7, 0.5],
-    110: [0.03, 0.1, 1, 0.08], 111: [0.04, 0.2, 0.9, 0.12], 112: [0.02, 0.2, 0.9, 0.06],
-    115: [0, 0.6, 0, 0.25], 116: [0, 0.15, 0, 0.05], 117: [0, 0.6, 0, 0.3], 120: [0, 0.5, 1, 0.1],
-    122: [0.03, 0.5, 1, 0.2], 123: [0.1, 0.5, 1, 0.3], 126: [0.1, 0.5, 1, 0.3], 127: [0.1, 0.5, 1, 0.3], 128: [0, 0.5, 1, 0.15] };
-  function envSuggest(prog) { var e = ENV_SOUND[prog] || ENV_FAMILY[famOf(prog)]; return { a: e[0], d: e[1], s: e[2], r: e[3] }; }
-
   /* a fresh layer: gemi opens with layer 1, and the plus button adds layers 2 and 3 like this (matches Parameters.h) */
-  var LAYER_DEFAULTS = [{ prog: 1, k: [0.8, 0.5, 0.9, 0.1] }, { prog: 49, k: [0.7, 0.5, 0.9, 0.1] }, { prog: 90, k: [0.6, 0.5, 0.85, 0.1] }];
+  var LAYER_DEFAULTS = [{ prog: 1, k: [0.8, 0.5, 1, 0] }, { prog: 49, k: [0.7, 0.5, 1, 0] }, { prog: 90, k: [0.6, 0.5, 1, 0] }];
   var LAYER_KNOBS = ['Level', 'Pan', 'Cutoff', 'Reso'], LAYER_TUNE = ['Octave', 'Semi', 'Fine'];
   var GLOBALS = [['Reverb', 0.45], ['Chorus', 0.2], ['Vibrato', 0], ['Glide', 0], ['Volume', 0.8]];
   function globalDefault(name) { return GLOBALS.filter(function (g) { return g[0] === name; })[0][1]; }
@@ -604,7 +577,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
       '<div style="position:absolute;inset:' + inset + 'px;border-radius:50%;background:' + cap + ';box-shadow:' + shadow + '"></div>' +
       '<div style="position:absolute;inset:0;transform:rotate(' + rot + 'deg)">' + pointer + '</div>' + bubble + '</div>';
     if (layout === 'none') return dial;
-    if (layout === 'side') return '<div style="display:flex;align-items:center;gap:8px">' + dial + '<div style="display:flex;flex-direction:column"><span style="font-size:11px;font-weight:800;color:' + t.label + '">' + label + '</span><span style="font-size:11px;font-weight:700;color:' + t.sub + '">' + fmt(label, v) + '</span></div></div>';
+    if (layout === 'side') return '<div style="display:flex;align-items:center;gap:8px">' + dial + '<div style="display:flex;flex-direction:column;width:58px"><span style="font-size:11px;font-weight:800;color:' + t.label + '">' + label + '</span><span style="font-size:11px;font-weight:700;color:' + t.sub + '">' + fmt(label, v) + '</span></div></div>';
     return '<div style="display:flex;flex-direction:column;align-items:center;gap:3px">' + dial + '<div style="font-size:10px;font-weight:800;color:' + t.label + '">' + label + '</div><div style="font-size:10px;font-weight:700;color:' + t.sub + '">' + fmt(label, v) + '</div></div>';
   }
 
@@ -827,7 +800,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
       '<div role="dialog" aria-label="About gemi" style="' + popIn('about') + panelStyle(t) + (t.frost ? 'background-color:' + (t.dark ? 'rgba(42,34,112,0.94)' : 'rgba(251,247,241,0.96)') + ';' : '') + 'color:' + t.fg + ';width:380px;padding:24px 26px;display:flex;flex-direction:column;gap:10px;box-shadow:0 24px 60px rgba(18,10,58,0.45)">' +
       '<div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:' + t.display + ';font-weight:' + t.displayWeight + ';font-size:' + Math.round(t.wordSize * 1.1) + 'px;line-height:1">gemi</span><span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:999px;background:' + t.accent + ';color:' + t.accentInk + '">v' + esc(ui.version) + '</span></div>' +
       '<div style="font-size:13px;font-weight:800">by Opalite Audio</div>' +
-      '<div style="font-size:12px;font-weight:700;line-height:1.5;color:' + t.sub + '">Sounds: GeneralUser GS by S. Christian Collins.<br>Engine: FluidSynth (LGPL-2.1), included as a replaceable library.<br>Fonts: Gaegu and Nunito (SIL Open Font License).<br>Built with JUCE. VST is a trademark of Steinberg Media Technologies GmbH.<br>Full licences are in the plugin bundle.</div>' +
+      '<div style="font-size:12px;font-weight:700;line-height:1.5;color:' + t.sub + '">' + (ui.soundSet === 'classic' ? 'Sounds: the Roland GS sound set built into macOS.<br>' : 'Sounds: GeneralUser GS by S. Christian Collins.<br>') + 'Engine: FluidSynth (LGPL-2.1), included as a replaceable library.<br>Fonts: Gaegu and Nunito (SIL Open Font License).<br>Built with JUCE. VST is a trademark of Steinberg Media Technologies GmbH.<br>Full licences are in the plugin bundle.</div>' +
       '<div style="display:flex;justify-content:flex-end;margin-top:6px">' + button(t, 'Close', 'primary', 'data-act="about-close"') + '</div></div></div>';
   }
   /* the view switch stays put: what sits beside it gets the same width in both views */
@@ -842,38 +815,47 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
       '<span style="font-size:11px;font-weight:800;color:' + t.accentOnChrome + '">COMBOS</span><span style="flex:1;font-size:15px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(ui.presetName) + '</span><span aria-hidden="true" style="font-size:11px">▾</span></button>' +
       '<button type="button" data-act="combo-next" aria-label="Next combo" style="width:34px;height:38px;border-radius:' + t.ctrlR + 'px;' + chrome + ';font-weight:800">›</button>' +
       button(t, 'Save', 'warm', 'data-act="combo-save"', 38), 'combos');
+    var wide = ui.layers === 1;   /* one layer gets the whole width: controls on the left, envelope on the right */
     var cards = [0, 1, 2].slice(0, ui.layers).map(function (i) {
       var c = t.L[i], onId = 'layer' + i, on = onId in ui.sw ? ui.sw[onId] : (ui.sw[onId] = true), label = 'LAYER ' + (i + 1);
       var inkC = t.dark ? c : mix(c, '#241D62', 0.45), e = shownEnv('L' + i, ui.layerEnv[i]);
       var remove = ui.layers > 1 ? '<button type="button" data-act="layer-remove-' + i + '" aria-label="Remove layer ' + (i + 1) + '" title="Remove layer" style="width:24px;height:24px;flex:none;padding:0;border-radius:50%;border:1px solid ' + t.ctrlBorder + ';background:' + t.ctrlBg + ';color:' + t.sub + ';font-size:11px;font-weight:800">✕</button>' : '';
+      var own = ownOn(i);
+      var envTag = own
+        ? '<span title="This sound\'s own envelope. Change any value to set your own." style="font-size:9px;font-weight:800;letter-spacing:0.5px;padding:2px 7px;border-radius:999px;background:' + t.ctrlBg + ';color:' + t.sub + '">SOUND\'S OWN</span>'
+        : '<button type="button" data-act="own-L-' + i + '" title="Go back to this sound\'s own envelope" style="height:18px;padding:0 8px;border-radius:999px;border:1px solid ' + t.ctrlBorder + ';background:' + t.ctrlBg + ';color:' + t.fg + ';font-size:9px;font-weight:800;letter-spacing:0.5px">↺ SOUND\'S OWN</button>';
+      var head = '<div style="display:flex;align-items:center;gap:8px"><div style="flex:1;font-size:13px;font-weight:800;letter-spacing:1px;color:' + t.label + '">' + label + '</div>' + toggle(t, onId, true, c, label + ' on') + remove + '</div>';
+      var pick = (function () { var pg = ui.layerProg[i]; return pickRow(t, 'L-' + i, picker(t, pad3(pg), GM_NAMES[pg - 1], GM_FAMILIES[famOf(pg)], inkC, 'pick-L-' + i, famColor(t, famOf(pg)).fill), i === 0 ? 'pick0' : ''); })();
+      var knobs = '<div' + (i === 0 ? ' data-tour="knobs0"' : '') + ' style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:2px">' + LAYER_KNOBS.map(function (k, j) { return knob(t, 'L' + i + k, k, LAYER_DEFAULTS[i].k[j], c, 'below'); }).join('') + '</div>';
+      var tune = '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px">' + LAYER_TUNE.map(function (k) {
+        var id = 'L' + i + k; if (!(id in ui.steps)) ui.steps[id] = 0;
+        return '<div style="display:flex;flex-direction:column;gap:3px"><div style="font-size:10px;font-weight:800;color:' + t.label + ';text-align:center">' + k + '</div>' + stepper(t, id, k, ui.steps[id], 26) + '</div>';
+      }).join('') + '</div>';
+      var env = '<div' + (i === 0 ? ' data-tour="env0"' : '') + ' style="flex:1;min-height:0;display:flex;flex-direction:column;gap:4px;padding:7px 10px;border-radius:' + t.ctrlR + 'px;background:' + t.well + '"><div style="display:flex;align-items:center;gap:6px"><span style="flex:1;font-size:10px;font-weight:800;letter-spacing:1px;color:' + t.label + '">ENVELOPE</span>' + envTag + '</div>' +
+        '<div style="flex:1;min-height:22px;position:relative;opacity:' + (own ? 0.8 : 1) + '">' + envSvg(t, e, c, '100%') + envHandles(t, e, c, 'L' + i) + '</div>' + adsrRow(t, e, c, 'L' + i, 26) + '</div>';
+      var body = wide
+        ? '<div style="flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px"><div style="display:flex;flex-direction:column;gap:14px;justify-content:center">' + pick + knobs + tune + '</div><div style="display:flex;flex-direction:column;min-height:0">' + env + '</div></div>'
+        : pick + knobs + tune + env;
       return '<section class="' + t.panelClass + '" aria-label="' + label + '" style="' + panelStyle(t) + 'padding:12px 13px;display:flex;flex-direction:column;gap:9px;min-width:0;overflow:hidden;opacity:' + (on ? 1 : 0.5) + '">' +
-        panelLayer(t) + '<div style="display:flex;align-items:center;gap:8px"><div style="flex:1;font-size:13px;font-weight:800;letter-spacing:1px;color:' + t.label + '">' + label + '</div>' + toggle(t, onId, true, c, label + ' on') + remove + '</div>' +
-        (function () { var pg = ui.layerProg[i]; return pickRow(t, 'L-' + i, picker(t, pad3(pg), GM_NAMES[pg - 1], GM_FAMILIES[famOf(pg)], inkC, 'pick-L-' + i, famColor(t, famOf(pg)).fill), i === 0 ? 'pick0' : ''); })() +
-        '<div' + (i === 0 ? ' data-tour="knobs0"' : '') + ' style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:2px">' + LAYER_KNOBS.map(function (k, j) { return knob(t, 'L' + i + k, k, LAYER_DEFAULTS[i].k[j], c, 'below'); }).join('') + '</div>' +
-        '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px">' + LAYER_TUNE.map(function (k) {
-          var id = 'L' + i + k; if (!(id in ui.steps)) ui.steps[id] = 0;
-          return '<div style="display:flex;flex-direction:column;gap:3px"><div style="font-size:10px;font-weight:800;color:' + t.label + ';text-align:center">' + k + '</div>' + stepper(t, id, k, ui.steps[id], 26) + '</div>';
-        }).join('') + '</div>' +
-        '<div' + (i === 0 ? ' data-tour="env0"' : '') + ' style="flex:1;min-height:0;display:flex;flex-direction:column;gap:4px;padding:7px 10px;border-radius:' + t.ctrlR + 'px;background:' + t.well + '"><div style="font-size:10px;font-weight:800;letter-spacing:1px;color:' + t.label + '">ENVELOPE</div>' +
-        '<div style="flex:1;min-height:22px;position:relative">' + envSvg(t, e, c, '100%') + envHandles(t, e, c, 'L' + i) + '</div>' + adsrRow(t, e, c, 'L' + i, 26) + '</div>' +
-        '</section>';
+        panelLayer(t) + head + body + '</section>';
     }).join('');
-    /* the empty space beside the layers: one big plus to add the next layer */
+    /* adding a layer: a slim tab on the right edge that slides out into the plus when the pointer is on it */
+    var addTab = '';
     if (ui.layers < 3) {
-      var nc = t.L[ui.layers];
-      cards += '<button type="button" data-act="layer-add" data-tour="add" aria-label="Add layer ' + (ui.layers + 1) + '" style="grid-column:span ' + (3 - ui.layers) + ';display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;border-radius:' + s.radius + 'px;border:2px dashed ' + (t.dark ? 'rgba(232,221,255,0.45)' : 'rgba(67,62,124,0.3)') + ';background:' + (t.dark ? 'rgba(42,34,112,0.28)' : 'rgba(255,252,247,0.32)') + ';backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);color:' + t.headFg + '">' +
-        '<span aria-hidden="true" class="plusorb" style="width:92px;height:92px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:' + nc + ';box-shadow:0 10px 28px ' + nc + '88, inset 0 -6px 0 ' + mix(nc, '#241D62', 0.2) + '">' +
-        '<svg width="44" height="44" viewBox="0 0 44 44"><path d="M22 6v32M6 22h32" stroke="' + ink(nc) + '" stroke-width="6" stroke-linecap="round"/></svg></span>' +
-        '<span style="font-size:16px;font-weight:800;text-shadow:' + t.wordGlow + '">Add layer ' + (ui.layers + 1) + '</span>' +
-        '<span style="font-size:12px;font-weight:700;color:' + t.headSub + ';text-shadow:' + t.wordGlow + '">Up to 3 layers. Every key plays them all.</span></button>';
+      var nc = t.L[ui.layers], open = tw('tab', 0).v, w = Math.round(20 + 170 * open);
+      addTab = '<button type="button" data-act="layer-add" data-tour="add" aria-label="Add layer ' + (ui.layers + 1) + '" style="position:absolute;top:0;bottom:0;right:0;width:' + w + 'px;z-index:5;padding:0;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;border-radius:' + Math.round(10 + 8 * open) + 'px;border:2px dashed ' + (t.dark ? 'rgba(232,221,255,' + (0.45 + 0.3 * open).toFixed(2) + ')' : 'rgba(67,62,124,' + (0.3 + 0.25 * open).toFixed(2) + ')') + ';background:' + (t.dark ? 'rgba(42,34,112,' + (0.35 + 0.55 * open).toFixed(2) + ')' : 'rgba(255,252,247,' + (0.4 + 0.5 * open).toFixed(2) + ')') + ';backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:' + t.headFg + ';box-shadow:' + (open > 0.02 ? '0 14px 40px rgba(18,10,58,' + (0.35 * open).toFixed(2) + ')' : 'none') + '">' +
+        '<span aria-hidden="true" style="width:' + Math.round(12 + 68 * open) + 'px;height:' + Math.round(12 + 68 * open) + 'px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;background:' + nc + ';box-shadow:0 8px 22px ' + nc + '88">' +
+        '<svg width="' + Math.round(10 + 28 * open) + '" height="' + Math.round(10 + 28 * open) + '" viewBox="0 0 44 44"><path d="M22 6v32M6 22h32" stroke="' + ink(nc) + '" stroke-width="6" stroke-linecap="round"/></svg></span>' +
+        '<span style="font-size:15px;font-weight:800;white-space:nowrap;opacity:' + Math.max(0, open * 1.6 - 0.6).toFixed(2) + '">Add layer ' + (ui.layers + 1) + '</span>' +
+        '<span style="width:150px;font-size:11px;font-weight:700;line-height:1.35;text-align:center;color:' + t.sub + ';opacity:' + Math.max(0, open * 1.6 - 0.6).toFixed(2) + '">Every key plays all your layers together.</span></button>';
     }
     var globals = GLOBALS.map(function (g) { return knob(t, 'G' + g[0], g[0], g[1], s.accent, 'side'); }).join('');
     var mpeOn = 'mpe' in ui.sw ? ui.sw.mpe : (ui.sw.mpe = false);
-    var strip = '<section class="' + t.panelClass + '" aria-label="Global" data-tour="globals" style="' + panelStyle(t) + 'flex:none;height:74px;box-sizing:border-box;display:flex;align-items:center;gap:16px;padding:0 18px;overflow:hidden">' + panelLayer(t) + globals + '<div style="flex:1"></div>' +
+    var strip = '<section class="' + t.panelClass + '" aria-label="Global" data-tour="globals" style="' + panelStyle(t) + 'flex:none;height:74px;box-sizing:border-box;display:flex;align-items:center;gap:12px;padding:0 18px;overflow:hidden">' + panelLayer(t) + globals + '<div style="flex:1"></div>' +
       seg(t, [{ label: 'Poly', on: !ui.mono, act: 'poly' }, { label: 'Mono', on: ui.mono, act: 'mono' }], t.l2, t.l2Ink, t.ctrlBg, t.ctrlBorder, t.fg, 28) +
       '<div data-tour="mpe" style="display:flex;align-items:center;gap:8px" title="MPE: channel 1 is the master channel; channels 2 to 16 each play one note with its own bend, pressure and slide">' + toggle(t, 'mpe', false, t.accent, 'MPE') +
-      '<div style="display:flex;flex-direction:column"><span style="font-size:12px;font-weight:800;color:' + t.label + '">MPE</span><span style="display:grid;font-size:11px;font-weight:700;color:' + t.sub + '"><span style="grid-area:1/1">' + (mpeOn ? 'On' : 'Off') + ' · Voices ' + ui.voices + '</span><span style="grid-area:1/1;visibility:hidden">Off · Voices 000</span></span></div></div></section>';
-    return titleMenu(t) + aboutCard(t) + soundPicker(t) + comboList(t) + wrap(t, header(t, center) + '<main style="flex:1;min-height:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px">' + cards + '</main>' + strip + keyboard(t, 36, 74));
+      '<div style="display:flex;flex-direction:column;white-space:nowrap"><span style="font-size:12px;font-weight:800;color:' + t.label + '">MPE</span><span style="display:grid;font-size:11px;font-weight:700;color:' + t.sub + '"><span style="grid-area:1/1">' + (mpeOn ? 'On' : 'Off') + ' · Voices ' + ui.voices + '</span><span style="grid-area:1/1;visibility:hidden">Off · Voices 000</span></span></div></div></section>';
+    return wrap(t, header(t, center) + '<main style="position:relative;flex:1;min-height:0;display:grid;grid-template-columns:repeat(' + ui.layers + ',minmax(0,1fr));gap:14px;padding-right:' + (ui.layers < 3 ? 30 : 0) + 'px">' + cards + addTab + '</main>' + strip + keyboard(t, 36, 74));
   }
 
   /* GM Player: one GM sound per MIDI channel, channel 10 is drums */
@@ -930,7 +912,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
   }
   function soundPicker(t) {
     var pk = ui.picker; if (!pk) return '';
-    var drums = pk.target === 'ch-10', cur, list = ui.pickMode === 'list';
+    var drums = pk.target === 'ch-10', cur, list = true;
     if (pk.target.indexOf('ch-') === 0) cur = drums ? ui.kit : ui.gmProg[+pk.target.slice(3) - 1];
     else cur = ui.layerProg[+pk.target.slice(2)];
     var title = pk.target.indexOf('ch-') === 0 ? 'Channel ' + pk.target.slice(3) + (drums ? ' · Drums' : '') : 'Layer ' + (+pk.target.slice(2) + 1);
@@ -945,29 +927,19 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
     } else if (list) {
       var tags = '<div role="navigation" aria-label="Jump to a family" style="display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px">' + GM_FAMILIES.map(function (f, i) {
         var fc = famColor(t, i), has = famOf(cur) === i;
-        return '<button type="button" data-act="pick-jump-' + i + '" title="' + f + '" style="height:24px;display:flex;align-items:center;gap:5px;padding:0 7px;border-radius:999px;border:1px solid ' + (has ? fc.fill : t.ctrlBorder) + ';background:' + (has ? fc.fill + '38' : t.ctrlBg) + ';color:' + t.fg + ';font-size:10px;font-weight:800;white-space:nowrap;overflow:hidden">' +
+        return '<button type="button" data-act="pick-jump-' + i + '" title="' + f + '" style="height:24px;display:flex;align-items:center;gap:4px;padding:0 5px;border-radius:999px;border:1px solid ' + (has ? fc.fill : t.ctrlBorder) + ';background:' + (has ? fc.fill + '38' : t.ctrlBg) + ';color:' + t.fg + ';font-size:10px;font-weight:800;white-space:nowrap;overflow:hidden">' +
           '<span style="width:7px;height:7px;border-radius:50%;flex:none;background:' + fc.fill + '"></span><span style="overflow:hidden;text-overflow:ellipsis">' + GM_TAGS[i] + '</span></button>';
       }).join('') + '</div>';
-      var all = '<div id="pklist" style="position:relative;height:318px;overflow-y:auto;padding-right:4px;display:flex;flex-direction:column;gap:10px">' + GM_FAMILIES.map(function (f, i) {
+      var all = '<div id="pklist" style="position:relative;height:350px;overflow-y:auto;padding-right:4px;display:flex;flex-direction:column;gap:10px">' + GM_FAMILIES.map(function (f, i) {
         var fc = famColor(t, i), rows = '';
         for (var k = 0; k < 8; k++) rows += soundRow(t, i * 8 + k + 1, cur, fc);
         return '<div id="pkfam-' + i + '" style="display:flex;flex-direction:column;gap:5px">' + famHead(t, i) + '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px">' + rows + '</div></div>';
       }).join('') + '</div>';
       body = tags + all;
-    } else {
-      var fam = pk.fam;
-      var chips = '<div role="tablist" aria-label="Families" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px">' + GM_FAMILIES.map(function (f, i) {
-        var fc = famColor(t, i), on = i === fam, has = famOf(cur) === i;
-        return '<button type="button" role="tab" aria-selected="' + on + '" data-act="pick-fam-' + i + '" style="height:30px;display:flex;align-items:center;gap:7px;padding:0 9px;border-radius:999px;border:1px solid ' + (on ? fc.fill : t.ctrlBorder) + ';box-shadow:' + (on ? 'inset 0 0 0 1px ' + fc.fill : 'none') + ';background:' + (on ? fc.fill + '38' : t.ctrlBg) + ';color:' + t.fg + ';font-size:12px;font-weight:800;text-align:left;white-space:nowrap">' +
-          '<span style="width:9px;height:9px;border-radius:50%;flex:none;box-sizing:border-box;background:' + fc.fill + '"></span><span style="flex:1;overflow:hidden;text-overflow:ellipsis">' + f + '</span>' + (has && !on ? '<span aria-label="current" style="font-size:9px;color:' + fc.text + '">●</span>' : '') + '</button>';
-      }).join('') + '</div>';
-      var rows8 = '';
-      for (var k2 = 0; k2 < 8; k2++) rows8 += soundRow(t, fam * 8 + k2 + 1, cur, famColor(t, fam));
-      body = chips + '<div style="margin-top:4px">' + famHead(t, fam) + '</div><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px">' + rows8 + '</div>';
     }
-    var modes = drums ? '' : seg(t, [{ label: 'By family', on: !list, act: 'pick-mode-family' }, { label: 'Full list', on: list, act: 'pick-mode-list' }], t.accent, t.accentInk, t.ctrlBg, t.ctrlBorder, t.fg, 26);
+    var modes = '';
     return '<div style="position:absolute;inset:0;z-index:35;background:' + (t.dark ? 'rgba(20,12,60,0.35)' : 'rgba(80,70,130,0.18)') + '"></div>' +
-      '<div role="dialog" data-picker aria-label="Choose a sound" style="' + popIn('picker') + panelStyle(t) + 'background-color:' + (t.dark ? 'rgba(42,34,112,0.96)' : 'rgba(251,247,241,0.97)') + ';position:absolute;left:170px;top:' + (list ? 84 : 110) + 'px;width:620px;z-index:36;color:' + t.fg + ';padding:16px 18px;display:flex;flex-direction:column;gap:10px;box-shadow:0 24px 60px rgba(18,10,58,0.4)">' +
+      '<div role="dialog" data-picker aria-label="Choose a sound" style="' + popIn('picker') + panelStyle(t) + 'background-color:' + (t.dark ? 'rgba(42,34,112,0.96)' : 'rgba(251,247,241,0.97)') + ';position:absolute;left:170px;top:' + (drums ? 110 : 84) + 'px;width:620px;z-index:36;color:' + t.fg + ';padding:16px 18px;display:flex;flex-direction:column;gap:10px;box-shadow:0 24px 60px rgba(18,10,58,0.4)">' +
       '<div style="display:flex;align-items:center;gap:10px"><span style="font-size:15px;font-weight:800;flex:1">Choose a sound <span style="font-weight:700;color:' + t.sub + '">· ' + title + '</span></span>' + modes +
       '<button type="button" data-act="pick-close" aria-label="Close" style="width:28px;height:28px;border-radius:50%;border:1px solid ' + t.ctrlBorder + ';background:' + t.ctrlBg + ';color:' + t.fg + ';font-weight:800">✕</button></div>' + body + '</div>';
   }
@@ -976,17 +948,19 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
     var tip = ui.gmTip ? '<section class="' + t.panelClass + '" aria-label="About GM Player" style="' + panelStyle(t) + 'flex:none;display:flex;align-items:center;gap:12px;padding:7px 10px 7px 14px">' + panelLayer(t) +
       '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" style="flex:none"><path d="M12 0C13 8 16 11 24 12 16 13 13 16 12 24 11 16 8 13 0 12 8 11 11 8 12 0Z" fill="' + t.accentLine + '"/></svg>' +
       '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px"><span style="font-size:12px;font-weight:800">One instrument per MIDI channel, up to 16 at once. Channel 10 is drums.</span>' +
-      '<span style="font-size:11px;font-weight:700;line-height:1.35;color:' + t.sub + '">Drag a General MIDI file into your DAW and route each part to its channel. Each channel also has its own output: load gemi as a multi-output instrument to mix them separately.</span></div>' +
+      '<span style="font-size:11px;font-weight:700;line-height:1.35;color:' + t.sub + '">Drag a General MIDI file into your DAW and route each part to its channel. To mix channels separately, switch Outputs to One per channel and use gemi\'s extra outputs in your DAW.</span></div>' +
       button(t, 'Switch to Synth', 'ghost', 'data-act="view-synth"', 28) + button(t, 'Got it', 'primary', 'data-act="gm-tip-close"', 28) + '</section>' : '';
     var rows = function (from) { var h = ''; for (var n = from; n < from + 8; n++) h += gmRow(t, n); return h; };
     var col = function (from) { return '<section class="' + t.panelClass + '" aria-label="Channels ' + from + ' to ' + (from + 7) + '" style="' + panelStyle(t) + 'min-height:0;padding:8px 8px;display:grid;grid-template-rows:repeat(8,minmax(0,1fr));gap:5px">' + panelLayer(t) + rows(from) + '</section>'; };
-    var follow = 'follow' in ui.sw ? ui.sw.follow : (ui.sw.follow = true);
+    var follow = 'follow' in ui.sw ? ui.sw.follow : (ui.sw.follow = true), multi = !!ui.sw.multiOut;
     var globals = ['Reverb', 'Chorus', 'Volume'].map(function (g) { return knob(t, 'G' + g, g, globalDefault(g), s.accent, 'side'); }).join('');
-    var strip = '<section class="' + t.panelClass + '" aria-label="Global" style="' + panelStyle(t) + 'flex:none;height:74px;box-sizing:border-box;display:flex;align-items:center;gap:16px;padding:0 18px;overflow:hidden">' + panelLayer(t) + globals + '<div style="flex:1"></div>' +
+    var strip = '<section class="' + t.panelClass + '" aria-label="Global" style="' + panelStyle(t) + 'flex:none;height:74px;box-sizing:border-box;display:flex;align-items:center;gap:12px;padding:0 16px;overflow:hidden">' + panelLayer(t) + globals + '<div style="flex:1"></div>' +
       '<div style="display:flex;align-items:center;gap:8px">' + toggle(t, 'follow', true, t.accent, 'Follow keyboard') +
-      '<div style="display:flex;flex-direction:column"><span style="font-size:12px;font-weight:800;color:' + t.label + '">Follow keyboard</span><span style="display:grid;font-size:11px;font-weight:700;color:' + t.sub + '"><span style="grid-area:1/1;visibility:' + (follow ? 'visible' : 'hidden') + '">Ch 1 input plays ch ' + ui.ch + '</span><span style="grid-area:1/1;visibility:' + (follow ? 'hidden' : 'visible') + '">Channels as routed</span></span></div></div>' +
-      button(t, 'GM Reset', 'ghost', 'data-act="gm-reset"', 30) + button(t, 'All Sound Off', 'ghost', 'data-act="panic"', 30) + '</section>';
-    return titleMenu(t) + aboutCard(t) + soundPicker(t) + wrap(t, header(t, center) + tip + '<main style="flex:1;min-height:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px">' + col(1) + col(9) + '</main>' + strip + keyboard(t, 36, 74));
+      '<div style="display:flex;flex-direction:column;white-space:nowrap"><span style="font-size:12px;font-weight:800;color:' + t.label + '">Follow keyboard</span><span style="display:grid;font-size:11px;font-weight:700;color:' + t.sub + '"><span style="grid-area:1/1;visibility:' + (follow ? 'visible' : 'hidden') + '">Ch 1 plays ch ' + ui.ch + '</span><span style="grid-area:1/1;visibility:' + (follow ? 'hidden' : 'visible') + '">Channels as routed</span></span></div></div>' +
+      '<div style="display:flex;align-items:center;gap:8px" title="Off: every channel plays on gemi\'s main output. On: each channel plays on its own output (Ch 1 to Ch 16) where your DAW has that output in use.">' + toggle(t, 'multiOut', false, t.accent, 'Separate outputs') +
+      '<div style="display:flex;flex-direction:column;white-space:nowrap"><span style="font-size:12px;font-weight:800;color:' + t.label + '">Outputs</span><span style="display:grid;font-size:11px;font-weight:700;color:' + t.sub + '"><span style="grid-area:1/1;visibility:' + (multi ? 'visible' : 'hidden') + '">One per channel</span><span style="grid-area:1/1;visibility:' + (multi ? 'hidden' : 'visible') + '">All on main</span></span></div></div>' +
+      '<div style="display:flex;gap:6px;white-space:nowrap">' + button(t, 'GM Reset', 'ghost', 'data-act="gm-reset"', 30) + button(t, 'All Sound Off', 'ghost', 'data-act="panic"', 30) + '</div></section>';
+    return wrap(t, header(t, center) + tip + '<main style="flex:1;min-height:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px">' + col(1) + col(9) + '</main>' + strip + keyboard(t, 36, 74));
   }
 
   var PLUGIN_BD = { clear: 'radial-gradient(250px 90px at 150px 46px, transparent 60%, #000 100%)', scrim: '230px 80px at 140px 44px' };
@@ -1003,10 +977,12 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
     document.body.classList.toggle('frozen', !!st.reduceMotion);
     var t = theme();
     var plug = $('plugin');
-    if (!$('pbd')) plug.innerHTML = '<div id="pbd" style="position:absolute;left:0;top:0;width:960px;height:640px;isolation:isolate;overflow:hidden"></div><div id="pcontent" style="position:relative"></div>';
+    if (!$('pbd')) plug.innerHTML = '<div id="pbd" style="position:absolute;left:0;top:0;width:960px;height:640px;isolation:isolate;overflow:hidden"></div><div id="pcontent" style="position:relative"></div><div id="poverlay" style="position:absolute;left:0;top:0;width:960px;height:640px;pointer-events:none"></div>';
     syncBackdrop($('pbd'), t, PLUGIN_BD);
     var pl = $('pklist'), keepScroll = pl ? pl.scrollTop : 0;
     $('pcontent').innerHTML = ui.view === 'gm' ? gmView(t) : synthView(t);
+    var over = titleMenu(t) + aboutCard(t) + soundPicker(t) + (ui.view === 'gm' ? '' : comboList(t));
+    if (over !== lastOverlay) { lastOverlay = over; $('poverlay').innerHTML = over; }
     fit();
     if ((pl = $('pklist'))) {
       var sec = ui.picker.jump !== null && ui.picker.jump !== undefined && $('pkfam-' + ui.picker.jump);
@@ -1022,7 +998,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
     }
     syncOut();
   }
-  var pending = false;
+  var pending = false, lastOverlay = null;
   function renderSoon() { if (pending) return; pending = true; requestAnimationFrame(function () { pending = false; render(); }); }
 
   /* the plugin window is sized by the host to 960×640 times the chosen window size; draw the 960×640 design scaled to fill it */
@@ -1087,10 +1063,10 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
       else if (a === 'tour-next') tourGo(1);
       else if (a === 'tour-back') tourGo(-1);
       else if (a === 'tour-skip') tourEnd();
+      else if (a.indexOf('own-L-') === 0) setOwn(+a.slice(6), true);
       else if (a === 'layer-add') { if (ui.layers < 3) { freshLayer(ui.layers); ui.layers++; } }
       else if (a.indexOf('layer-remove-') === 0) removeLayer(+a.slice(13));
       else if (a.indexOf('prev-') === 0 || a.indexOf('next-') === 0) stepSound(a.slice(5), a.indexOf('next-') === 0 ? 1 : -1);
-      else if (a === 'pick-mode-family' || a === 'pick-mode-list') { ui.pickMode = a.slice(10); if (ui.pickMode === 'list') ui.picker.jump = famOf(pickerCurrent() || 1); }
       else if (a.indexOf('pick-jump-') === 0) ui.picker.jump = +a.slice(10);
       else if (a === 'view-synth') ui.view = 'synth';
       else if (a === 'view-gm') ui.view = 'gm';
@@ -1102,9 +1078,8 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
         var tg = a.indexOf('pick-ch-') === 0 ? 'ch-' + a.slice(8) : 'L-' + a.slice(7);
         if (tg.indexOf('ch-') === 0) ui.ch = +tg.slice(3);
         var cp = tg.indexOf('ch-') === 0 ? ui.gmProg[+tg.slice(3) - 1] : ui.layerProg[+tg.slice(2)];
-        ui.picker = { target: tg, fam: famOf(cp || 1), jump: ui.pickMode === 'list' ? famOf(cp || 1) : null }; openedAt.picker = performance.now();
+        ui.picker = { target: tg, jump: famOf(cp || 1) }; openedAt.picker = performance.now();
       }
-      else if (a.indexOf('pick-fam-') === 0) ui.picker.fam = +a.slice(9);
       else if (a.indexOf('pick-set-') === 0) {
         var pv = +a.slice(9), tg2 = ui.picker.target;
         if (tg2 === 'ch-10') ui.kit = pv; else if (tg2.indexOf('ch-') === 0) ui.gmProg[+tg2.slice(3) - 1] = pv; else setLayerSound(+tg2.slice(2), pv);
@@ -1130,16 +1105,18 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
     var tg = ui.picker && ui.picker.target; if (!tg) return 0;
     return tg === 'ch-10' ? ui.kit : tg.indexOf('ch-') === 0 ? ui.gmProg[+tg.slice(3) - 1] : ui.layerProg[+tg.slice(2)];
   }
-  /* a layer's new sound brings its suggested envelope, and the envelope's notch moves there too */
-  function setLayerSound(i, pg) {
-    ui.layerProg[i] = pg;
-    var e = envSuggest(pg);
-    ['a', 'd', 's', 'r'].forEach(function (k) { ui.layerEnv[i][k] = e[k]; var o = tw('e:L' + i + ':' + k, e[k]); o.t = e[k]; o.d = e[k]; });
+  /* each layer plays its sound's own envelope until an ADSR control is touched; the plugin reads that envelope
+     from the sound set and the display shows it (and the notch sits on it) */
+  function ownOn(i) { return ui.sw['own' + i] !== false; }
+  function applyOwn(i) {
+    var e = ui.ownEnv[i]; if (!e || e.a === undefined) return;
+    ['a', 'd', 's', 'r'].forEach(function (k) { var o = tw('e:L' + i + ':' + k, e[k]); o.d = e[k]; if (ownOn(i)) { ui.layerEnv[i][k] = e[k]; o.t = e[k]; } });
     kick();
   }
-  function envNotches() {
-    ui.layerProg.forEach(function (pg, i) { var e = envSuggest(pg); ['a', 'd', 's', 'r'].forEach(function (k) { tw('e:L' + i + ':' + k, ui.layerEnv[i][k]).d = e[k]; }); });
-  }
+  function setOwn(i, on) { ui.sw['own' + i] = on; tw('s:own' + i, 1).t = on ? 1 : 0; if (on) applyOwn(i); }
+  /* a layer's new sound plays with that sound's own envelope */
+  function setLayerSound(i, pg) { ui.layerProg[i] = pg; setOwn(i, true); kick(); }
+  function envNotches() { [0, 1, 2].forEach(applyOwn); }
   function stepSound(target, d) {
     var wrap = function (pg) { return (pg - 1 + d + 128) % 128 + 1; };
     if (target === 'ch-10') {
@@ -1151,20 +1128,19 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
       var i = +target.slice(2); setLayerSound(i, wrap(ui.layerProg[i]));
     }
   }
-  var LAYER_PARAMS = ['on', 'level', 'pan', 'cutoff', 'reso', 'attack', 'decay', 'sustain', 'release', 'oct', 'semi', 'fine'];
-  /* an added layer starts fresh: its slot's default sound with that sound's envelope */
+  var LAYER_PARAMS = ['on', 'level', 'pan', 'cutoff', 'reso', 'attack', 'decay', 'sustain', 'release', 'ownenv', 'oct', 'semi', 'fine'];
+  /* an added layer starts fresh: its slot's default sound with that sound's own envelope */
   function freshLayer(i) {
     var d = LAYER_DEFAULTS[i];
     PARAM_BY_ID['l' + (i + 1) + '_on'].set(1, true);
     LAYER_KNOBS.forEach(function (k, j) { var o = tw('k:L' + i + k, d.k[j]); o.t = o.v = d.k[j]; });
     LAYER_TUNE.forEach(function (k) { ui.steps['L' + i + k] = 0; });
     setLayerSound(i, d.prog);
-    ['a', 'd', 's', 'r'].forEach(function (k) { var o = tw('e:L' + i + ':' + k, 0); o.v = o.t; });
   }
   /* removing a layer moves the ones after it down, so the layers stay numbered 1, 2, 3 */
   function removeLayer(i) {
     for (var j = i; j < ui.layers - 1; j++) {
-      ui.layerProg[j] = ui.layerProg[j + 1];
+      ui.layerProg[j] = ui.layerProg[j + 1]; ui.ownEnv[j] = ui.ownEnv[j + 1];
       LAYER_PARAMS.forEach(function (sfx) { PARAM_BY_ID['l' + (j + 1) + '_' + sfx].set(PARAM_BY_ID['l' + (j + 2) + '_' + sfx].get(), true); });
       ['a', 'd', 's', 'r'].forEach(function (k) { tw('e:L' + j + ':' + k, 0).d = tw('e:L' + (j + 1) + ':' + k, 0).d; });
     }
@@ -1174,10 +1150,10 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
   /* ---------- tutorial: a short tour on first open, again from the gemi menu ---------- */
   var TOUR = [
     { title: 'Welcome to gemi', text: 'Every General MIDI sound in one plugin. Here is a quick tour; it takes under a minute.' },
-    { at: 'pick0', title: 'Choose a sound', text: 'Click the name to browse all 128 sounds, by family or as one long list. The arrows step to the previous or next sound. Each sound arrives with an envelope that suits it.' },
-    { at: 'add', title: 'Stack up to three layers', text: 'Click the plus to add a layer. Every key you play sounds all your layers together. A layer\'s switch mutes it; the cross removes it.' },
+    { at: 'pick0', title: 'Choose a sound', text: 'Click the name to browse all 128 classic General MIDI sounds, with a tag to jump to each family. The arrows step to the previous or next sound.' },
+    { at: 'add', title: 'Stack up to three layers', text: 'Point at the right edge and click the plus to add a layer. Every key you play sounds all your layers together. A layer\'s switch mutes it; the cross removes it.' },
     { at: 'knobs0', title: 'Shape the sound', text: 'Drag a knob up or down. It clicks into a notch at its default: hold Shift to glide past, or Cmd for fine moves. Double-click resets.' },
-    { at: 'env0', title: 'The envelope', text: 'How each note starts, holds and fades. Drag the points on the curve, or the A, D, S and R values below it.' },
+    { at: 'env0', title: 'The envelope', text: 'How each note starts, holds and fades. It starts as the sound\'s own; drag the points or the A, D, S and R values to make it yours, and click Sound\'s own to go back.' },
     { at: 'combos', title: 'Combos', text: 'A combo keeps all your layers and settings together. Step through the factory combos or save your own.' },
     { at: 'globals', title: 'For every layer', text: 'Reverb, chorus, vibrato and glide apply to all layers. Mono plays one note at a time.' },
     { at: 'mpe', title: 'MPE', text: 'Playing an MPE controller? Switch MPE on and every note bends, presses and slides on its own.' },
@@ -1192,6 +1168,8 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
     while (n > 0 && n < TOUR.length && TOUR[n].at && !tourTarget(n)) n += d;   /* skip what is not on screen, like the plus with three layers */
     if (n >= TOUR.length) { tourEnd(); return; }
     ui.tour.step = Math.max(0, n);
+    tw('tab', 0).t = TOUR[ui.tour.step].at === 'add' ? 1 : 0;   /* show the add tab open while the tour talks about it */
+    kick();
   }
   function placeTour(t) {
     var root = $('tour');
@@ -1215,9 +1193,10 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
     var last = step === TOUR.length - 1;
     var dots = TOUR.map(function (x, i) { return '<span style="width:' + (i === step ? 14 : 6) + 'px;height:6px;border-radius:3px;background:' + (i === step ? t.accentLine : t.ctrlBorder) + '"></span>'; }).join('');
     card.style.cssText += ';' + panelStyle(t) + 'background-color:' + (t.dark ? 'rgba(42,34,112,0.97)' : 'rgba(251,247,241,0.98)') + ';color:' + t.fg + ';font-family:' + t.body + ';padding:16px 18px;box-sizing:border-box;display:flex;flex-direction:column;gap:8px;box-shadow:0 18px 48px rgba(18,10,58,0.45)';
-    card.innerHTML = '<div style="font-family:' + t.display + ';font-weight:' + t.displayWeight + ';font-size:28px;line-height:1">' + info.title + '</div>' +
+    card.innerHTML = '<div style="display:flex;gap:4px">' + dots + '</div>' +
+      '<div style="font-family:' + t.display + ';font-weight:' + t.displayWeight + ';font-size:28px;line-height:1">' + info.title + '</div>' +
       '<div style="font-size:13px;font-weight:700;line-height:1.45;color:' + t.sub + '">' + info.text + '</div>' +
-      '<div style="display:flex;align-items:center;gap:6px;margin-top:4px"><div style="flex:1;display:flex;gap:4px">' + dots + '</div>' +
+      '<div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;margin-top:4px">' +
       (last ? '' : '<button type="button" data-act="tour-skip" style="height:30px;padding:0 10px;border:none;background:transparent;color:' + t.sub + ';font-size:12px;font-weight:800">Skip</button>') +
       (step > 0 ? button(t, 'Back', 'ghost', 'data-act="tour-back"', 30) : '') + button(t, last ? 'Let\'s play' : step === 0 ? 'Start' : 'Next', 'primary', 'data-act="tour-next"', 30) + '</div>';
     var ch = card.offsetHeight, x, y;
@@ -1262,6 +1241,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
   var pressedInPicker = false;
   document.addEventListener('pointerdown', function (e) { pressedInMenu = !!e.target.closest('[role="menu"], [data-act="menu"]'); pressedInPicker = !!e.target.closest('[data-picker]'); }, true);
   var lastDown = { spec: '', at: 0, x: 0, y: 0 };
+  function customEnv(spec) { var m = /^(env|fader):L(\d)/.exec(spec); if (m && ownOn(+m[2])) setOwn(+m[2], false); }
   function resetToDefault(spec, el, x, y) {
     gesture(specParams(spec), true);
     targetsFor(spec, el).forEach(function (g) { setTarget(g, g.o.d); });
@@ -1281,6 +1261,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
       return;
     }
     lastDown = { spec: spec, at: now, x: e.clientX, y: e.clientY };
+    customEnv(spec);
     var tgs = targetsFor(spec, el);
     gesture(specParams(spec), true);
     drag = { spec: spec, tgs: tgs, stuck: tgs.map(function () { return 0; }), x: e.clientX, y: e.clientY };
@@ -1337,12 +1318,18 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
     if (!dir) return;
     e.preventDefault();
     var spec = el.dataset.drag, g = targetsFor(spec, el)[0];
+    customEnv(spec);
     setTarget(g, clamp01(g.o.t + dir * ((e.metaKey || e.ctrlKey) ? 0.01 : 0.05)));
     kick();
     requestAnimationFrame(function () { var again = document.querySelector('[data-drag="' + spec + '"]'); if (again) again.focus(); });
   });
 
   window.addEventListener('resize', fit);
+  document.addEventListener('pointermove', function (e) {
+    var over = !!(e.target.closest && e.target.closest('[data-act="layer-add"]')) || !!(ui.tour && TOUR[ui.tour.step].at === 'add');
+    var o = tw('tab', 0); if (o.t !== (over ? 1 : 0)) { o.t = over ? 1 : 0; kick(); }
+  });
+  document.documentElement.addEventListener('mouseleave', function () { var o = tw('tab', 0); if (o.t) { o.t = 0; kick(); } });
   /* ---------- bridge to the plugin ----------
      The page talks to the plugin with "gemi" events. Knobs, switches and steppers are host parameters (automatable,
      saved with the project); sounds, mode, theme and window size are plugin state. Changes are found by comparing
@@ -1363,6 +1350,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
         var def = ui.layerEnv[i][k], key = 'e:L' + i + ':' + k;
         list.push({ id: L + { a: 'attack', d: 'decay', s: 'sustain', r: 'release' }[k], get: function () { return ui.layerEnv[i][k]; }, set: function (v, now) { ui.layerEnv[i][k] = v; var o = tw(key, def); o.t = v; if (now) o.v = v; } });
       });
+      switchParam(L + 'ownenv', 'own' + i, true);
       LAYER_TUNE.forEach(function (k, j) {
         var sid = 'L' + i + k;
         list.push({ id: L + ['oct', 'semi', 'fine'][j], get: function () { return ui.steps[sid] || 0; }, set: function (v) { ui.steps[sid] = Math.round(v); } });
@@ -1392,7 +1380,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
   function unmask(m) { var o = {}; for (var n = 1; n <= 16; n++) o[n] = !!(m & (1 << (n - 1))); return o; }
   function stateSnap() {
     return { view: ui.view, layerProg: ui.layerProg.slice(), gmProg: ui.gmProg.slice(), kit: ui.kit, mute: mask(ui.mute), solo: mask(ui.solo),
-      ch: ui.ch, follow: ui.sw.follow !== false, gmTip: !!ui.gmTip, theme: st.mode, reduceMotion: !!st.reduceMotion, size: ui.size };
+      ch: ui.ch, follow: ui.sw.follow !== false, multiOut: !!ui.sw.multiOut, gmTip: !!ui.gmTip, theme: st.mode, reduceMotion: !!st.reduceMotion, size: ui.size };
   }
   function applyState(v) {
     if (!v) return;
@@ -1405,6 +1393,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
     if (v.ch) ui.ch = v.ch;
     if (v.follow !== undefined) { ui.sw.follow = !!v.follow; tw('s:follow', 1).t = tw('s:follow', 1).v = v.follow ? 1 : 0; }
     if (v.gmTip !== undefined) ui.gmTip = !!v.gmTip;
+    if (v.multiOut !== undefined) { ui.sw.multiOut = !!v.multiOut; tw('s:multiOut', 0).t = tw('s:multiOut', 0).v = v.multiOut ? 1 : 0; }
     if (v.theme) st.mode = v.theme;
     if (v.reduceMotion !== undefined) { st.reduceMotion = !!v.reduceMotion; ui.sw.reduceMotion = st.reduceMotion; tw('s:reduceMotion', 0).t = tw('s:reduceMotion', 0).v = st.reduceMotion ? 1 : 0; }
     if (v.size) ui.size = v.size;
@@ -1433,10 +1422,13 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
       if (m.presets) { ui.presets = m.presets; ui.presetIdx = m.presetIndex; ui.presetName = m.presetName || ui.presetName; }
       bridge.state = JSON.stringify(stateSnap()); bridge.ready = true;
       ui.tourSeen = !!m.tourSeen;
+      if (m.soundSet) ui.soundSet = m.soundSet;
+      if (m.ownEnv) { ui.ownEnv = m.ownEnv; envNotches(); }
       if (!ui.tourSeen) tourStart();
       render(); return;
     }
     if (m.type === 'params') { applyParams(m.values, false); kick(); return; }
+    if (m.type === 'ownEnv') { ui.ownEnv = m.envs || ui.ownEnv; envNotches(); return; }
     if (m.type === 'state') { applyState(m.state); bridge.state = JSON.stringify(stateSnap()); render(); return; }
     if (m.type === 'presets') { ui.presets = m.presets || ui.presets; ui.presetIdx = m.presetIndex; ui.presetName = m.presetName || ''; render(); return; }
     if (m.type === 'tick') {
