@@ -411,10 +411,8 @@ void GemiProcessor::handleGMMidi (const juce::MidiMessage& m)
         return;
     }
 
-    // Follow keyboard: a controller on MIDI channel 1 plays whichever channel is selected.
-    int channel = inChannel;
-    if (followKeyboard.load() && inChannel == 0)
-        channel = selectedChannel.load() - 1;
+    // Every MIDI channel plays its own sound; only the on-screen keyboard plays the selected channel.
+    const int channel = inChannel;
 
     if (m.isNoteOn())
     {
@@ -645,7 +643,6 @@ juce::var GemiProcessor::getUiState() const
     o->setProperty ("mute", (int) muteMask.load());
     o->setProperty ("solo", (int) soloMask.load());
     o->setProperty ("ch", selectedChannel.load());
-    o->setProperty ("follow", followKeyboard.load());
     o->setProperty ("multiOut", separateOutputs.load());
     const juce::ScopedLock sl (prefsLock);
     for (const auto& key : { "theme", "reduceMotion", "size", "gmTip" })
@@ -667,7 +664,6 @@ void GemiProcessor::setUiState (const juce::var& v)
     if (v.hasProperty ("mute"))   muteMask = (uint32_t) (int) v["mute"];
     if (v.hasProperty ("solo"))   soloMask = (uint32_t) (int) v["solo"];
     if (v.hasProperty ("ch"))     selectedChannel = juce::jlimit (1, 16, (int) v["ch"]);
-    if (v.hasProperty ("follow")) followKeyboard = (bool) v["follow"];
     if (v.hasProperty ("multiOut")) separateOutputs = (bool) v["multiOut"];
     const juce::ScopedLock sl (prefsLock);
     if (auto* prefs = uiPrefs.getDynamicObject())

@@ -79,8 +79,8 @@ inline const std::vector<ParamSpec>& paramSpecs()
             add ("semi", "Semitones", Kind::stepper, (float) d.semi, -12, 12);
             add ("fine", "Fine", Kind::stepper, (float) d.fine, -50, 50);
         }
-        v.push_back ({ "reverb", "Reverb", Kind::knob, 0.45f });
-        v.push_back ({ "chorus", "Chorus", Kind::knob, 0.20f });
+        v.push_back ({ "reverb", "Reverb", Kind::knob, 0.0f });
+        v.push_back ({ "chorus", "Chorus", Kind::knob, 0.0f });
         v.push_back ({ "vibrato", "Vibrato", Kind::knob, 0.0f });
         v.push_back ({ "glide", "Glide", Kind::knob, 0.0f });
         v.push_back ({ "volume", "Volume", Kind::knob, 0.80f });

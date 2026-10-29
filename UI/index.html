@@ -182,6 +182,14 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
 #poverlay > * { pointer-events: auto; }
 .plug [data-act="layer-add"]:active { transform: none; }
 #tourcard button { white-space: nowrap; flex: none; }
+.gmpick:hover { background: rgba(127, 110, 200, 0.14) !important; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; background-color: rgba(255, 255, 255, 0.4); }
+body.theme-light ::-webkit-scrollbar-thumb { background-color: rgba(58, 58, 70, 0.6); }
+body.theme-light ::-webkit-scrollbar-thumb:hover { background-color: rgba(40, 40, 52, 0.8); }
+#helptip { position: absolute; z-index: 80; max-width: 240px; padding: 7px 10px; border-radius: 10px; font-size: 12px; font-weight: 700; line-height: 1.35; pointer-events: none; opacity: 0; transition: opacity 0.12s ease; }
+#helptip.on { opacity: 1; }
 </style>
 
 </head>
@@ -217,7 +225,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
   var s = {};   /* flattened view of st for the current mode, rebuilt on every render */
 
   var ui = {
-    tab: 'plugin', view: 'synth', layerOn: [true, true, true], ch: 1, follow: true, mono: false, gmTip: true, mute: {}, solo: {}, gmProg: [1, 34, 49, 26, 57, 74, 5, 82, 89, 0, 12, 66, 53, 123, 128, 99], kit: 1, layerProg: [1, 49, 90], layers: 1, picker: null, ownEnv: [{}, {}, {}],
+    tab: 'plugin', view: 'synth', layerOn: [true, true, true], ch: 1, mono: false, gmTip: true, mute: {}, solo: {}, gmProg: [1, 34, 49, 26, 57, 74, 5, 82, 89, 0, 12, 66, 53, 123, 128, 99], kit: 1, layerProg: [1, 49, 90], layers: 1, picker: null, ownEnv: [{}, {}, {}],
     held: [], localHeld: [], chActive: [], voices: 0, version: '0.2a', presets: [], presetIdx: 0, presetName: 'Grand Piano', combos: false,
     vals: {}, sw: {}, steps: {}, tw: {}, pops: {}, menu: false, about: false, size: 1, tipSpec: null, tour: null, tourSeen: false,
     env: { a: 0.35, d: 0.45, s: 0.65, r: 0.55 },
@@ -255,8 +263,29 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
     'Tinkle Bell', 'Agogo', 'Steel Drums', 'Woodblock', 'Taiko Drum', 'Melodic Tom', 'Synth Drum', 'Reverse Cymbal',
     'Guitar Fret Noise', 'Breath Noise', 'Seashore', 'Bird Tweet', 'Telephone Ring', 'Helicopter', 'Applause', 'Gunshot'];
   var GM_FAMILIES = ['Piano', 'Chromatic Perc.', 'Organ', 'Guitar', 'Bass', 'Strings', 'Ensemble', 'Brass', 'Reed', 'Pipe', 'Synth Lead', 'Synth Pad', 'Synth Effects', 'Ethnic', 'Percussive', 'Sound Effects'];
-  var GM_TAGS = ['Piano', 'Chrom. Perc.', 'Organ', 'Guitar', 'Bass', 'Strings', 'Ensemble', 'Brass', 'Reed', 'Pipe', 'Lead', 'Pad', 'Synth FX', 'Ethnic', 'Percussive', 'SFX'];   /* short names for the jump tags */
   var GM_KITS = [[1, 'Standard Kit'], [9, 'Room Kit'], [17, 'Power Kit'], [25, 'Electronic Kit'], [26, 'TR-808 Kit'], [33, 'Jazz Kit'], [41, 'Brush Kit'], [49, 'Orchestra Kit'], [57, 'SFX Kit']];
+  /* a small line drawing for each GM family (index -1 is the drum kits), drawn in the family colour */
+  var FAM_ICONS = [
+    '<rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M7.5 18v-5M12 18v-5M16.5 18v-5"/><path d="M6 6v7h3V6M15 6v7h3V6" fill="currentColor" stroke="none"/>',
+    '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10.5 20.5h3"/><path d="M12 3v2"/>',
+    '<path d="M4 20V10a1 1 0 0 1 2 0v10M9 20V5a1 1 0 0 1 2 0v15M14 20V7a1 1 0 0 1 2 0v13M19 20V11a1 1 0 0 1 2 0v9M3 20h19"/>',
+    '<circle cx="9" cy="15.5" r="4.5"/><circle cx="9" cy="15.5" r="1.3"/><path d="M11.5 12 19 4.5M17.5 3l3.5 3.5"/>',
+    '<path d="M6 7a5 5 0 0 1 9 3c0 5-5 8-10 10"/><circle cx="6.5" cy="9.5" r="1.5" fill="currentColor"/><circle cx="19" cy="8" r="1" fill="currentColor"/><circle cx="19" cy="13" r="1" fill="currentColor"/>',
+    '<path d="M12 3c-2 0-3 2-2.5 4C8 8 7 10 8.5 12 6 14 7 21 12 21s6-7 3.5-9C17 10 16 8 14.5 7 15 5 14 3 12 3z"/><path d="M12 9v8M4 20 20 5"/>',
+    '<circle cx="7" cy="9" r="2.5"/><circle cx="17" cy="9" r="2.5"/><circle cx="12" cy="7" r="2.5"/><path d="M3 19a4 4 0 0 1 8 0M13 19a4 4 0 0 1 8 0M8 16a4 4 0 0 1 8 0"/>',
+    '<path d="M3 11h10l6-4v10l-6-4H3z"/><path d="M6 11V8M9 11V8M6 13v3h7"/>',
+    '<path d="M9 3h3v11a3 3 0 0 0 6 0v-2"/><path d="M16.5 12h3"/><path d="M9 3 7 2"/><circle cx="10.5" cy="7" r="0.6" fill="currentColor"/><circle cx="10.5" cy="10" r="0.6" fill="currentColor"/>',
+    '<path d="M2 14 22 8"/><path d="M2 16 22 10"/><circle cx="9" cy="12" r="0.8" fill="currentColor"/><circle cx="13" cy="10.8" r="0.8" fill="currentColor"/><circle cx="17" cy="9.6" r="0.8" fill="currentColor"/>',
+    '<path d="M2 16h4V8h6v8h6V8h4"/>',
+    '<path d="M2 13c2.5-6 5-6 7.5 0s5 6 7.5 0 3.5-3 5-1"/>',
+    '<path d="M12 3 13.6 10.4 21 12 13.6 13.6 12 21 10.4 13.6 3 12 10.4 10.4z"/><path d="M19 3v3M17.5 4.5h3"/>',
+    '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',
+    '<ellipse cx="12" cy="9" rx="7" ry="2.5"/><path d="M5 9v7c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V9"/><path d="M14 6 20 2M10 6 4 2"/>',
+    '<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/>'];
+  var KIT_ICON = '<ellipse cx="8" cy="15" rx="5" ry="2"/><path d="M3 15v3c0 1.1 2.2 2 5 2s5-.9 5-2v-3"/><path d="M14 8h8M18 8v12M15 20h6"/><path d="M5 11 9 5M11 11 7 5"/>';
+  function famIcon(f, color, size) {
+    return '<svg aria-hidden="true" width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="none" stroke="' + color + '" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex:none;color:' + color + '">' + (f < 0 ? KIT_ICON : FAM_ICONS[f]) + '</svg>';
+  }
   function famOf(prog) { return Math.floor((prog - 1) / 8); }
   function pad3(n) { return ('00' + n).slice(-3); }
   /* one soft colour per family, walking the colour wheel so neighbouring families sit near each other;
@@ -270,7 +299,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
   /* a fresh layer: gemi opens with layer 1, and the plus button adds layers 2 and 3 like this (matches Parameters.h) */
   var LAYER_DEFAULTS = [{ prog: 1, k: [0.8, 0.5, 1, 0] }, { prog: 49, k: [0.7, 0.5, 1, 0] }, { prog: 90, k: [0.6, 0.5, 1, 0] }];
   var LAYER_KNOBS = ['Level', 'Pan', 'Cutoff', 'Reso'], LAYER_TUNE = ['Octave', 'Semi', 'Fine'];
-  var GLOBALS = [['Reverb', 0.45], ['Chorus', 0.2], ['Vibrato', 0], ['Glide', 0], ['Volume', 0.8]];
+  var GLOBALS = [['Reverb', 0], ['Chorus', 0], ['Vibrato', 0], ['Glide', 0], ['Volume', 0.8]];
   function globalDefault(name) { return GLOBALS.filter(function (g) { return g[0] === name; })[0][1]; }
 
   /* ---------- derive the theme ---------- */
@@ -497,14 +526,17 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
   function val(id, dflt) { return tw('k:' + id, dflt).v; }
   function shownEnv(ref, e) { return { a: tw('e:' + ref + ':a', e.a).v, d: tw('e:' + ref + ':d', e.d).v, s: tw('e:' + ref + ':s', e.s).v, r: tw('e:' + ref + ':r', e.r).v }; }
   var animating = false;
-  function kick() { if (!animating) { animating = true; requestAnimationFrame(step); } }
+  var needsRender = true;
+  function kick() { needsRender = true; if (!animating) { animating = true; requestAnimationFrame(step); } }
+  function kickKeys() { var keep = needsRender; kick(); needsRender = keep; }
   function step() {
-    var moving = false, k = st.animate === 'on' ? 0.2 : 1;
+    var moving = false, onlyKeys = true, k = st.animate === 'on' ? 0.2 : 1;
     Object.keys(ui.tw).forEach(function (key) {
       var o = ui.tw[key], d = o.t - o.v;
-      if (Math.abs(d) > 0.0008) { o.v += d * k; moving = true; } else o.v = o.t;
+      if (Math.abs(d) > 0.0008) { o.v += d * k; moving = true; if (key.indexOf('key:') !== 0) onlyKeys = false; }
+      else if (o.v !== o.t) { o.v = o.t; if (key.indexOf('key:') !== 0) onlyKeys = false; }
     });
-    render();
+    if (onlyKeys && !needsRender) paintKeys(); else { needsRender = false; render(); }
     if (moving) requestAnimationFrame(step); else animating = false;
   }
 
@@ -720,6 +752,26 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
     if (colors.length === 1) return mix(base, colors[0], k);
     return 'linear-gradient(180deg, ' + colors.map(function (c, i) { return mix(base, c, k) + ' ' + Math.round(i / (colors.length - 1) * 100) + '%'; }).join(', ') + ')';
   }
+  /* playing only changes key colours, voice counts and channel lights: those are updated where they are, so the
+     panels (and their frosted backdrops) are not rebuilt dozens of times a second while notes play */
+  function paintKeys() {
+    var t = theme(), colors = keyColors(t);
+    document.querySelectorAll('#pcontent [data-key]').forEach(function (el) {
+      var o = ui.tw['key:' + el.dataset.key], kv = o ? o.v : 0;
+      if (el.dataset.black) el.style.background = keyFill(t.blackKey, colors, kv * 0.85);
+      else { el.style.background = keyFill(t.whiteKey, colors, kv); el.style.boxShadow = kv > 0.02 && t.glow > 0 ? 'inset 0 -' + Math.round(10 * t.glow * kv) + 'px 14px -6px rgba(255,255,255,0.9)' : 'none'; }
+    });
+  }
+  function paintActivity() {
+    var t = theme(), v = $('voicecount');
+    if (v) v.textContent = (ui.sw.mpe ? 'On' : 'Off') + ' · Voices ' + ui.voices;
+    var anySolo = Object.keys(ui.solo).some(function (k) { return ui.solo[k]; });
+    document.querySelectorAll('#pcontent [data-led]').forEach(function (el) {
+      var n = +el.dataset.led, muted = ui.mute[n] || (anySolo && !ui.solo[n]);
+      var html = led(t, famColor(t, chSound(n).fam).fill, !!ui.chActive[n - 1] && !muted, 12);
+      if (el.innerHTML !== html) el.innerHTML = html;
+    });
+  }
   function keyboard(t, whites, height) {
     var colors = keyColors(t), html = '';
     var lit = function (n) { var o = ui.tw['key:' + n]; return o ? o.v : 0; };
@@ -729,7 +781,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
     }
     for (var j = 0; j < whites - 1; j++) if ([0, 1, 3, 4, 5].indexOf(j % 7) >= 0) {
       var bn = whiteNote(j) + 1, bv = lit(bn);
-      html += '<div data-key="' + bn + '" style="position:absolute;top:0;height:56%;width:' + (60 / whites).toFixed(2) + '%;left:' + (((j + 1) / whites) * 100 - 30 / whites).toFixed(2) + '%;border-radius:0 0 6px 6px;background:' + keyFill(t.blackKey, colors, bv * 0.85) + '"></div>';
+      html += '<div data-key="' + bn + '" data-black="1" style="position:absolute;top:0;height:56%;width:' + (60 / whites).toFixed(2) + '%;left:' + (((j + 1) / whites) * 100 - 30 / whites).toFixed(2) + '%;border-radius:0 0 6px 6px;background:' + keyFill(t.blackKey, colors, bv * 0.85) + '"></div>';
     }
     return '<div aria-label="Keyboard" data-tour="keys" style="position:relative;height:' + height + 'px;flex:none;display:flex;border-radius:' + t.keysR + 'px;overflow:hidden;box-shadow:0 6px 22px rgba(60,30,110,0.3);cursor:pointer;touch-action:none">' + html + '</div>';
   }
@@ -752,14 +804,14 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
   }
   function picker(t, num, name, family, numColor, act, famDot) {
     return '<button type="button"' + (act ? ' data-act="' + act + '" aria-haspopup="dialog"' : '') + ' style="height:40px;width:100%;display:flex;align-items:center;gap:7px;padding:0 9px;border-radius:' + t.ctrlR + 'px;border:1px solid ' + t.ctrlBorder + ';background:' + t.ctrlBg + ';color:' + t.fg + ';text-align:left">' +
-      '<span style="font-size:11px;font-weight:800;color:' + numColor + '">' + num + '</span><span style="flex:1;min-width:0;display:flex;flex-direction:column"><span class="clip" style="font-size:14px;font-weight:800">' + name + '</span><span style="display:flex;align-items:center;gap:5px;font-size:10px;font-weight:700;color:' + t.sub + '">' + (famDot ? '<span style="width:7px;height:7px;border-radius:50%;flex:none;background:' + famDot + '"></span>' : '') + family + '</span></span><span aria-hidden="true" style="font-size:11px;color:' + t.sub + '">▾</span></button>';
+      '<span style="font-size:11px;font-weight:800;color:' + numColor + '">' + num + '</span><span style="flex:1;min-width:0;display:flex;flex-direction:column"><span class="clip" style="font-size:14px;font-weight:800">' + name + '</span><span style="display:flex;align-items:center;gap:5px;font-size:10px;font-weight:700;color:' + t.sub + '">' + (famDot ? famIcon(GM_FAMILIES.indexOf(family), famDot, 12) : '') + family + '</span></span><span aria-hidden="true" style="font-size:11px;color:' + t.sub + '">▾</span></button>';
   }
 
   /* ---------- whole plugin ---------- */
   function header(t, center) {
     return '<header style="display:flex;align-items:center;gap:14px;height:64px;flex:none;color:' + t.headFg + '">' +
       '<div style="display:flex;flex-direction:column;gap:3px;min-width:200px"><div style="display:flex;align-items:baseline;gap:8px">' +
-      '<button type="button" data-act="menu" data-tour="menu" aria-haspopup="menu" aria-expanded="' + ui.menu + '" title="gemi menu" style="display:flex;align-items:baseline;gap:4px;padding:0;border:none;background:transparent;color:inherit;cursor:pointer">' +
+      '<button type="button" data-act="menu" data-tour="menu" aria-haspopup="menu" aria-expanded="' + ui.menu + '" style="display:flex;align-items:baseline;gap:4px;padding:0;border:none;background:transparent;color:inherit;cursor:pointer">' +
       '<span style="font-family:' + t.display + ';font-weight:' + t.displayWeight + ';font-size:' + t.wordSize + 'px;line-height:0.9;text-shadow:' + t.wordGlow + '">gemi</span>' +
       '<svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.75;transform:rotate(' + (ui.menu ? 180 : 0) + 'deg);transition:transform 0.15s ease;filter:drop-shadow(0 1px 2px rgba(20,12,60,0.35))"><path d="M3 4.5 6 7.5 9 4.5"/></svg></button>' +
       '<span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:999px;background:' + t.accent + ';color:' + t.accentInk + '">v' + esc(ui.version) + '</span></div>' +
@@ -774,7 +826,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
     return age > 200 ? '' : 'animation:menuIn 0.16s ease-out both;animation-delay:-' + Math.round(age) + 'ms;';
   }
   function menuItem(t, label, act, checked, extra) {
-    return '<button type="button" role="' + (checked === null ? 'menuitem' : 'menuitemradio') + '"' + (checked === null ? '' : ' aria-checked="' + checked + '"') + ' data-act="' + act + '" style="display:flex;align-items:center;gap:10px;width:100%;height:34px;padding:0 10px;border:none;border-radius:' + t.ctrlR + 'px;text-align:left;font-size:13px;font-weight:800;color:' + t.fg + ';background:' + (checked ? t.ctrlBg : 'transparent') + '">' +
+    return '<button type="button" role="' + (checked === null ? 'menuitem' : 'menuitemradio') + '"' + (checked === null ? '' : ' aria-checked="' + checked + '"') + ' data-act="' + act + '" style="display:flex;align-items:center;gap:10px;width:100%;height:34px;padding:0 10px;border:none;border-radius:' + t.ctrlR + 'px;text-align:left;font-size:13px;font-weight:800;color:' + t.fg + ';background:' + (checked ? t.accent + (t.dark ? '33' : '40') : 'transparent') + ';box-shadow:' + (checked ? 'inset 0 0 0 2px ' + t.accentLine : 'none') + '">' +
       (extra || '') + '<span style="flex:1">' + label + '</span>' +
       (checked ? '<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24"><path d="M12 0C13 8 16 11 24 12 16 13 13 16 12 24 11 16 8 13 0 12 8 11 11 8 12 0Z" fill="' + t.accentLine + '"/></svg>' : '') + '</button>';
   }
@@ -791,7 +843,8 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
       '<div style="height:1px;margin:4px 6px;background:' + t.ctrlBorder + '"></div>' +
       '<div style="display:flex;align-items:center;gap:10px;height:36px;padding:0 10px">' + '<span style="flex:1;font-size:13px;font-weight:800">Reduce motion<span style="display:block;font-size:11px;font-weight:700;color:' + t.sub + '">' + (rm ? 'Background paused' : 'Aurora and clouds move') + '</span></span>' + toggle(t, 'reduceMotion', rm, t.accent, 'Reduce motion') + '</div>' +
       '<div style="height:1px;margin:4px 6px;background:' + t.ctrlBorder + '"></div>' +
-      lab('HELP') + menuItem(t, 'Show tutorial', 'tour-start', null, '<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24"><path d="M12 0C13 8 16 11 24 12 16 13 13 16 12 24 11 16 8 13 0 12 8 11 11 8 12 0Z" fill="currentColor"/></svg>') +
+      lab('HELP') + '<div style="display:flex;align-items:center;gap:10px;height:36px;padding:0 10px"><span style="flex:1;font-size:13px;font-weight:800">Hover help<span style="display:block;font-size:11px;font-weight:700;color:' + t.sub + '">' + (ui.sw.hoverHelp !== false ? 'Tips when you point at a control' : 'Off') + '</span></span>' + toggle(t, 'hoverHelp', true, t.accent, 'Hover help') + '</div>' +
+      menuItem(t, 'Show tutorial', 'tour-start', null, '<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24"><path d="M12 0C13 8 16 11 24 12 16 13 13 16 12 24 11 16 8 13 0 12 8 11 11 8 12 0Z" fill="currentColor"/></svg>') +
       menuItem(t, 'About gemi', 'about', null, '<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>') + '</div>';
   }
   function aboutCard(t) {
@@ -800,7 +853,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
       '<div role="dialog" aria-label="About gemi" style="' + popIn('about') + panelStyle(t) + (t.frost ? 'background-color:' + (t.dark ? 'rgba(42,34,112,0.94)' : 'rgba(251,247,241,0.96)') + ';' : '') + 'color:' + t.fg + ';width:380px;padding:24px 26px;display:flex;flex-direction:column;gap:10px;box-shadow:0 24px 60px rgba(18,10,58,0.45)">' +
       '<div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:' + t.display + ';font-weight:' + t.displayWeight + ';font-size:' + Math.round(t.wordSize * 1.1) + 'px;line-height:1">gemi</span><span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:999px;background:' + t.accent + ';color:' + t.accentInk + '">v' + esc(ui.version) + '</span></div>' +
       '<div style="font-size:13px;font-weight:800">by Opalite Audio</div>' +
-      '<div style="font-size:12px;font-weight:700;line-height:1.5;color:' + t.sub + '">' + 'Sounds: GeneralUser GS by S. Christian Collins.<br>' + 'Engine: FluidSynth (LGPL-2.1), included as a replaceable library.<br>Fonts: Gaegu and Nunito (SIL Open Font License).<br>Built with JUCE. VST is a trademark of Steinberg Media Technologies GmbH.<br>Full licences are in the plugin bundle.</div>' +
+      '<div style="font-size:12px;font-weight:700;line-height:1.5;color:' + t.sub + '">Sounds: GeneralUser GS by S. Christian Collins.<br>Engine: FluidSynth (LGPL-2.1), included as a replaceable library.<br>Full licences are in the plugin bundle.</div>' +
       '<div style="display:flex;justify-content:flex-end;margin-top:6px">' + button(t, 'Close', 'primary', 'data-act="about-close"') + '</div></div></div>';
   }
   /* the view switch stays put: what sits beside it gets the same width in both views */
@@ -819,13 +872,13 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
     var cards = [0, 1, 2].slice(0, ui.layers).map(function (i) {
       var c = t.L[i], onId = 'layer' + i, on = onId in ui.sw ? ui.sw[onId] : (ui.sw[onId] = true), label = 'LAYER ' + (i + 1);
       var inkC = t.dark ? c : mix(c, '#241D62', 0.45), e = shownEnv('L' + i, ui.layerEnv[i]);
-      var remove = ui.layers > 1 ? '<button type="button" data-act="layer-remove-' + i + '" aria-label="Remove layer ' + (i + 1) + '" title="Remove layer" style="width:24px;height:24px;flex:none;padding:0;border-radius:50%;border:1px solid ' + t.ctrlBorder + ';background:' + t.ctrlBg + ';color:' + t.sub + ';font-size:11px;font-weight:800">✕</button>' : '';
+      var remove = ui.layers > 1 ? '<button type="button" data-act="layer-remove-' + i + '" aria-label="Remove layer ' + (i + 1) + '" style="width:24px;height:24px;flex:none;padding:0;border-radius:50%;border:1px solid ' + t.ctrlBorder + ';background:' + t.ctrlBg + ';color:' + t.sub + ';font-size:11px;font-weight:800">✕</button>' : '';
       var own = ownOn(i);
       var envTag = own
-        ? '<span title="This sound\'s own envelope. Change any value to set your own." style="font-size:9px;font-weight:800;letter-spacing:0.5px;padding:2px 7px;border-radius:999px;background:' + t.ctrlBg + ';color:' + t.sub + '">SOUND\'S OWN</span>'
-        : '<button type="button" data-act="own-L-' + i + '" title="Go back to this sound\'s own envelope" style="height:18px;padding:0 8px;border-radius:999px;border:1px solid ' + t.ctrlBorder + ';background:' + t.ctrlBg + ';color:' + t.fg + ';font-size:9px;font-weight:800;letter-spacing:0.5px">↺ SOUND\'S OWN</button>';
+        ? '<span style="font-size:9px;font-weight:800;letter-spacing:0.5px;padding:2px 7px;border-radius:999px;background:' + t.ctrlBg + ';color:' + t.sub + '">SOUND\'S OWN</span>'
+        : '<button type="button" data-act="own-L-' + i + '" style="height:18px;padding:0 8px;border-radius:999px;border:1px solid ' + t.ctrlBorder + ';background:' + t.ctrlBg + ';color:' + t.fg + ';font-size:9px;font-weight:800;letter-spacing:0.5px">↺ SOUND\'S OWN</button>';
       var head = '<div style="display:flex;align-items:center;gap:8px"><div style="flex:1;font-size:13px;font-weight:800;letter-spacing:1px;color:' + t.label + '">' + label + '</div>' + toggle(t, onId, true, c, label + ' on') + remove + '</div>';
-      var pick = (function () { var pg = ui.layerProg[i]; return pickRow(t, 'L-' + i, picker(t, pad3(pg), GM_NAMES[pg - 1], GM_FAMILIES[famOf(pg)], inkC, 'pick-L-' + i, famColor(t, famOf(pg)).fill), i === 0 ? 'pick0' : ''); })();
+      var pick = (function () { var pg = ui.layerProg[i]; return pickRow(t, 'L-' + i, picker(t, pad3(pg), GM_NAMES[pg - 1], GM_FAMILIES[famOf(pg)], inkC, 'pick-L-' + i, famColor(t, famOf(pg)).text), i === 0 ? 'pick0' : ''); })();
       var knobs = '<div' + (i === 0 ? ' data-tour="knobs0"' : '') + ' style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:2px">' + LAYER_KNOBS.map(function (k, j) { return knob(t, 'L' + i + k, k, LAYER_DEFAULTS[i].k[j], c, 'below'); }).join('') + '</div>';
       var tune = '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px">' + LAYER_TUNE.map(function (k) {
         var id = 'L' + i + k; if (!(id in ui.steps)) ui.steps[id] = 0;
@@ -853,8 +906,8 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
     var mpeOn = 'mpe' in ui.sw ? ui.sw.mpe : (ui.sw.mpe = false);
     var strip = '<section class="' + t.panelClass + '" aria-label="Global" data-tour="globals" style="' + panelStyle(t) + 'flex:none;height:74px;box-sizing:border-box;display:flex;align-items:center;gap:12px;padding:0 18px;overflow:hidden">' + panelLayer(t) + globals + '<div style="flex:1"></div>' +
       seg(t, [{ label: 'Poly', on: !ui.mono, act: 'poly' }, { label: 'Mono', on: ui.mono, act: 'mono' }], t.l2, t.l2Ink, t.ctrlBg, t.ctrlBorder, t.fg, 28) +
-      '<div data-tour="mpe" style="display:flex;align-items:center;gap:8px" title="MPE: channel 1 is the master channel; channels 2 to 16 each play one note with its own bend, pressure and slide">' + toggle(t, 'mpe', false, t.accent, 'MPE') +
-      '<div style="display:flex;flex-direction:column;white-space:nowrap"><span style="font-size:12px;font-weight:800;color:' + t.label + '">MPE</span><span style="display:grid;font-size:11px;font-weight:700;color:' + t.sub + '"><span style="grid-area:1/1">' + (mpeOn ? 'On' : 'Off') + ' · Voices ' + ui.voices + '</span><span style="grid-area:1/1;visibility:hidden">Off · Voices 000</span></span></div></div></section>';
+      '<div data-tour="mpe" style="display:flex;align-items:center;gap:8px">' + toggle(t, 'mpe', false, t.accent, 'MPE') +
+      '<div style="display:flex;flex-direction:column;white-space:nowrap"><span style="font-size:12px;font-weight:800;color:' + t.label + '">MPE</span><span style="display:grid;font-size:11px;font-weight:700;color:' + t.sub + '"><span id="voicecount" style="grid-area:1/1">' + (mpeOn ? 'On' : 'Off') + ' · Voices ' + ui.voices + '</span><span style="grid-area:1/1;visibility:hidden">Off · Voices 000</span></span></div></div></section>';
     return wrap(t, header(t, center) + '<main style="position:relative;flex:1;min-height:0;display:grid;grid-template-columns:repeat(' + ui.layers + ',minmax(0,1fr));gap:14px;padding-right:' + (ui.layers < 3 ? 30 : 0) + 'px">' + cards + addTab + '</main>' + strip + keyboard(t, 36, 74));
   }
 
@@ -868,14 +921,13 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
     var anySolo = Object.keys(ui.solo).some(function (k) { return ui.solo[k]; });
     var muted = ui.mute[n] || (anySolo && !ui.solo[n]), playing = !!ui.chActive[n - 1] && !muted;
     var mini = function (label, on, act, col) { return '<button type="button" aria-pressed="' + !!on + '" aria-label="' + (label === 'M' ? 'Mute' : 'Solo') + ' channel ' + n + '" data-act="' + act + '" style="width:22px;height:20px;flex:none;padding:0;border:none;border-radius:6px;font-size:10px;font-weight:800;background:' + (on ? col : t.ctrlBg) + ';color:' + (on ? ink(col) : t.sub) + ';box-shadow:inset 0 0 0 1px ' + t.ctrlBorder + '">' + label + '</button>'; };
-    return '<div style="display:flex;align-items:center;gap:7px;min-width:0;padding:0 8px;border-radius:' + t.ctrlR + 'px;background:' + (sel ? t.ctrlBg : 'transparent') + ';box-shadow:' + (sel ? 'inset 0 0 0 1.5px ' + c : 'none') + ';opacity:' + (muted ? 0.5 : 1) + '">' +
-      led(t, c, playing, 12) +
-      '<button type="button" data-act="ch-' + n + '" aria-pressed="' + sel + '" aria-label="Select channel ' + n + '" style="height:100%;display:flex;align-items:center;gap:8px;padding:0;border:none;background:transparent;color:inherit;text-align:left">' +
+    return '<div data-act="ch-' + n + '" aria-label="Channel ' + n + (sel ? ', selected for preview' : '') + '" style="display:flex;align-items:center;gap:7px;min-width:0;padding:0 8px;border-radius:' + t.ctrlR + 'px;cursor:pointer;background:' + (sel ? t.ctrlBg : 'transparent') + ';box-shadow:' + (sel ? 'inset 0 0 0 1.5px ' + c : 'none') + ';opacity:' + (muted ? 0.5 : 1) + '">' +
+      '<span data-led="' + n + '" style="display:flex">' + led(t, c, playing, 12) + '</span>' +
       '<span style="width:20px;flex:none;font-size:12px;font-weight:800;color:' + t.label + '">' + n + '</span>' +
-      '<span style="width:30px;flex:none;font-size:11px;font-weight:800;color:' + fc.text + '">' + d.num + '</span></button>' +
-      '<button type="button" data-act="pick-ch-' + n + '" aria-haspopup="dialog" aria-label="Channel ' + n + ' sound: ' + d.name + '. Change sound" style="flex:1;min-width:0;height:100%;display:flex;align-items:center;gap:8px;padding:0;border:none;background:transparent;color:inherit;text-align:left">' +
-      '<span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;line-height:1.2"><span style="font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + d.name + '</span><span style="font-size:10px;font-weight:800;color:' + fc.text + '">' + d.famName + '</span></span>' +
-      '<span aria-hidden="true" style="font-size:10px;color:' + t.sub + '">▾</span></button>' +
+      '<span style="width:30px;flex:none;font-size:11px;font-weight:800;color:' + fc.text + '">' + d.num + '</span>' +
+      '<button type="button" class="gmpick" data-act="pick-ch-' + n + '" aria-haspopup="dialog" aria-label="Channel ' + n + ' sound: ' + d.name + '. Change sound" style="max-width:210px;min-width:0;height:calc(100% - 4px);display:flex;align-items:center;gap:8px;padding:0 8px;margin-left:-8px;border:none;border-radius:8px;background:transparent;color:inherit;text-align:left">' +
+      '<span style="min-width:0;display:flex;flex-direction:column;gap:2px;line-height:1.2"><span style="font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + d.name + '</span><span style="display:flex;align-items:center;gap:4px;font-size:10px;font-weight:800;color:' + fc.text + '">' + famIcon(d.fam, fc.text, 11) + d.famName + '</span></span>' +
+      '<span aria-hidden="true" style="font-size:10px;color:' + t.sub + '">▾</span></button><span style="flex:1"></span>' +
       ['prev', 'next'].map(function (dir) { return '<button type="button" data-act="' + dir + '-ch-' + n + '" aria-label="' + (dir === 'prev' ? 'Previous' : 'Next') + ' sound for channel ' + n + '" style="width:20px;height:20px;flex:none;padding:0;border:none;border-radius:6px;font-size:13px;font-weight:800;line-height:1;background:' + t.ctrlBg + ';color:' + t.fg + ';box-shadow:inset 0 0 0 1px ' + t.ctrlBorder + '">' + (dir === 'prev' ? '‹' : '›') + '</button>'; }).join('') +
       mini('M', ui.mute[n], 'mute-' + n, t.l2) + mini('S', ui.solo[n], 'solo-' + n, t.accent) + '</div>';
   }
@@ -908,7 +960,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
   }
   function famHead(t, f) {
     var fc = famColor(t, f);
-    return '<div style="display:flex;align-items:center;gap:8px"><span style="width:12px;height:12px;border-radius:50%;background:' + fc.fill + '"></span><span style="font-size:14px;font-weight:800;color:' + fc.text + '">' + GM_FAMILIES[f] + '</span><span style="font-size:11px;font-weight:700;color:' + t.sub + '">' + pad3(f * 8 + 1) + '–' + pad3(f * 8 + 8) + '</span></div>';
+    return '<div style="display:flex;align-items:center;gap:8px">' + famIcon(f, fc.text, 18) + '<span style="font-size:14px;font-weight:800;color:' + fc.text + '">' + GM_FAMILIES[f] + '</span><span style="font-size:11px;font-weight:700;color:' + t.sub + '">' + pad3(f * 8 + 1) + '–' + pad3(f * 8 + 8) + '</span></div>';
   }
   function soundPicker(t) {
     var pk = ui.picker; if (!pk) return '';
@@ -925,10 +977,9 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
           '<span style="font-size:11px;color:' + dc.text + '">' + pad3(k[0]) + '</span><span style="flex:1">' + k[1] + '</span></button>';
       }).join('') + '</div>';
     } else if (list) {
-      var tags = '<div role="navigation" aria-label="Jump to a family" style="display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px">' + GM_FAMILIES.map(function (f, i) {
+      var tags = '<div role="navigation" aria-label="Jump to a family" style="display:grid;grid-template-columns:repeat(16,minmax(0,1fr));gap:4px">' + GM_FAMILIES.map(function (f, i) {
         var fc = famColor(t, i), has = famOf(cur) === i;
-        return '<button type="button" data-act="pick-jump-' + i + '" title="' + f + '" style="height:24px;display:flex;align-items:center;gap:4px;padding:0 5px;border-radius:999px;border:1px solid ' + (has ? fc.fill : t.ctrlBorder) + ';background:' + (has ? fc.fill + '38' : t.ctrlBg) + ';color:' + t.fg + ';font-size:10px;font-weight:800;white-space:nowrap;overflow:hidden">' +
-          '<span style="width:7px;height:7px;border-radius:50%;flex:none;background:' + fc.fill + '"></span><span style="overflow:hidden;text-overflow:ellipsis">' + GM_TAGS[i] + '</span></button>';
+        return '<button type="button" data-act="pick-jump-' + i + '" data-help="' + f + '" aria-label="Jump to ' + f + '" style="height:32px;display:flex;align-items:center;justify-content:center;padding:0;border-radius:10px;border:1px solid ' + (has ? fc.fill : t.ctrlBorder) + ';background:' + (has ? fc.fill + '38' : t.ctrlBg) + '">' + famIcon(i, fc.text, 18) + '</button>';
       }).join('') + '</div>';
       var all = '<div id="pklist" style="position:relative;height:350px;overflow-y:auto;padding-right:4px;display:flex;flex-direction:column;gap:10px">' + GM_FAMILIES.map(function (f, i) {
         var fc = famColor(t, i), rows = '';
@@ -948,16 +999,15 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
     var tip = ui.gmTip ? '<section class="' + t.panelClass + '" aria-label="About GM Player" style="' + panelStyle(t) + 'flex:none;display:flex;align-items:center;gap:12px;padding:7px 10px 7px 14px">' + panelLayer(t) +
       '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" style="flex:none"><path d="M12 0C13 8 16 11 24 12 16 13 13 16 12 24 11 16 8 13 0 12 8 11 11 8 12 0Z" fill="' + t.accentLine + '"/></svg>' +
       '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px"><span style="font-size:12px;font-weight:800">One instrument per MIDI channel, up to 16 at once. Channel 10 is drums.</span>' +
-      '<span style="font-size:11px;font-weight:700;line-height:1.35;color:' + t.sub + '">Drag a General MIDI file into your DAW and route each part to its channel. To mix channels separately, switch Outputs to One per channel and use gemi\'s extra outputs in your DAW.</span></div>' +
+      '<span style="font-size:11px;font-weight:700;line-height:1.35;color:' + t.sub + '">Drag a General MIDI file into your DAW and route each part to its channel. Click a channel to preview it on the keys. To mix channels separately, switch Outputs to One per channel and use gemi\'s extra outputs in your DAW.</span></div>' +
       button(t, 'Switch to Synth', 'ghost', 'data-act="view-synth"', 28) + button(t, 'Got it', 'primary', 'data-act="gm-tip-close"', 28) + '</section>' : '';
     var rows = function (from) { var h = ''; for (var n = from; n < from + 8; n++) h += gmRow(t, n); return h; };
     var col = function (from) { return '<section class="' + t.panelClass + '" aria-label="Channels ' + from + ' to ' + (from + 7) + '" style="' + panelStyle(t) + 'min-height:0;padding:8px 8px;display:grid;grid-template-rows:repeat(8,minmax(0,1fr));gap:5px">' + panelLayer(t) + rows(from) + '</section>'; };
-    var follow = 'follow' in ui.sw ? ui.sw.follow : (ui.sw.follow = true), multi = !!ui.sw.multiOut;
+    var multi = !!ui.sw.multiOut;
     var globals = ['Reverb', 'Chorus', 'Volume'].map(function (g) { return knob(t, 'G' + g, g, globalDefault(g), s.accent, 'side'); }).join('');
     var strip = '<section class="' + t.panelClass + '" aria-label="Global" style="' + panelStyle(t) + 'flex:none;height:74px;box-sizing:border-box;display:flex;align-items:center;gap:12px;padding:0 16px;overflow:hidden">' + panelLayer(t) + globals + '<div style="flex:1"></div>' +
-      '<div style="display:flex;align-items:center;gap:8px">' + toggle(t, 'follow', true, t.accent, 'Follow keyboard') +
-      '<div style="display:flex;flex-direction:column;white-space:nowrap"><span style="font-size:12px;font-weight:800;color:' + t.label + '">Follow keyboard</span><span style="display:grid;font-size:11px;font-weight:700;color:' + t.sub + '"><span style="grid-area:1/1;visibility:' + (follow ? 'visible' : 'hidden') + '">Ch 1 plays ch ' + ui.ch + '</span><span style="grid-area:1/1;visibility:' + (follow ? 'hidden' : 'visible') + '">Channels as routed</span></span></div></div>' +
-      '<div style="display:flex;align-items:center;gap:8px" title="Off: every channel plays on gemi\'s main output. On: each channel plays on its own output (Ch 1 to Ch 16) where your DAW has that output in use.">' + toggle(t, 'multiOut', false, t.accent, 'Separate outputs') +
+      '<div style="display:flex;flex-direction:column;white-space:nowrap;margin-right:4px"><span style="font-size:12px;font-weight:800;color:' + t.label + '">Preview</span><span style="font-size:11px;font-weight:700;color:' + t.sub + '">Keys play ch ' + ui.ch + '</span></div>' +
+      '<div style="display:flex;align-items:center;gap:8px">' + toggle(t, 'multiOut', false, t.accent, 'Separate outputs') +
       '<div style="display:flex;flex-direction:column;white-space:nowrap"><span style="font-size:12px;font-weight:800;color:' + t.label + '">Outputs</span><span style="display:grid;font-size:11px;font-weight:700;color:' + t.sub + '"><span style="grid-area:1/1;visibility:' + (multi ? 'visible' : 'hidden') + '">One per channel</span><span style="grid-area:1/1;visibility:' + (multi ? 'hidden' : 'visible') + '">All on main</span></span></div></div>' +
       '<div style="display:flex;gap:6px;white-space:nowrap">' + button(t, 'GM Reset', 'ghost', 'data-act="gm-reset"', 30) + button(t, 'All Sound Off', 'ghost', 'data-act="panic"', 30) + '</div></section>';
     return wrap(t, header(t, center) + tip + '<main style="flex:1;min-height:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px">' + col(1) + col(9) + '</main>' + strip + keyboard(t, 36, 74));
@@ -975,6 +1025,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
     var ae = document.activeElement, fsel = CTL && CTL + ',[data-drag]', fkey = fsel && ae && ae.matches && ae.matches(fsel) ? ctlKey(ae) : '';
     s = Object.assign({}, FIXED, st, MODES[st.mode]);
     document.body.classList.toggle('frozen', !!st.reduceMotion);
+    document.body.classList.toggle('theme-light', st.mode === 'light');
     var t = theme();
     var plug = $('plugin');
     if (!$('pbd')) plug.innerHTML = '<div id="pbd" style="position:absolute;left:0;top:0;width:960px;height:640px;isolation:isolate;overflow:hidden"></div><div id="pcontent" style="position:relative"></div><div id="poverlay" style="position:absolute;left:0;top:0;width:960px;height:640px;pointer-events:none"></div>';
@@ -1044,6 +1095,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
     if ((el = target.closest('[data-sw]'))) {
       var sid = el.dataset.sw, now = !ui.sw[sid], c0 = centerOf(el);
       if (sid === 'reduceMotion') { st.reduceMotion = now; }
+      if (sid === 'hoverHelp') { send('hoverHelp', { on: now }); hideHelp(); }
       ui.sw[sid] = now; tw('s:' + sid, now ? 0 : 1).t = now ? 1 : 0;
       kick(); return;
     }
@@ -1325,6 +1377,61 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
   });
 
   window.addEventListener('resize', fit);
+
+  /* ---------- hover help: a short tip when the pointer rests on a control (switch off in the gemi menu) ---------- */
+  var KNOB_HELP = {
+    Level: 'How loud this layer is.', Pan: 'Where this layer sits, left to right.', Cutoff: 'Darkens the sound by filtering off the highs. Fully open leaves the sound as designed.',
+    Reso: 'Adds a peak at the cutoff for a sharper, vocal edge.', Reverb: 'Room and space around every layer.', Chorus: 'A gentle shimmer that thickens the sound.',
+    Vibrato: 'Pitch wobble. Your mod wheel adds to it.', Glide: 'Slides the pitch from one note to the next.', Volume: 'gemi\'s overall output level.' };
+  var ENV_HELP = { a: 'Attack: how quickly a note fades in.', d: 'Decay: how quickly it falls to the sustain level.', s: 'Sustain: the level held while the key is down.', r: 'Release: how long it rings after you let go.' };
+  function helpFor(el) {
+    if (el.dataset.help) return el.dataset.help;
+    var d = el.dataset.drag, a = el.dataset.act, sw = el.dataset.sw, step = el.dataset.step;
+    if (d && d.indexOf('knob:') === 0) return KNOB_HELP[el.getAttribute('aria-label')] + ' Drag up or down; double-click resets.';
+    if (d) { var m = /:([adsr])(?::|$)/.exec(d.replace(/^env:L\d/, '').replace(/^fader:L\d/, '')); if (m) return ENV_HELP[m[1]] + ' Changing it replaces the sound\'s own envelope.'; }
+    if (step) return /Octave/.test(step) ? 'Shifts this layer by whole octaves.' : /Semi/.test(step) ? 'Shifts this layer by semitones.' : 'Fine tuning in cents. Slight detune between layers sounds wide and lush.';
+    if (sw) return /^layer/.test(sw) ? 'Mutes or unmutes this layer.' : sw === 'mpe' ? 'MPE controllers: channel 1 is the master, channels 2 to 16 each bend, press and slide one note.' : sw === 'multiOut' ? 'Off: every channel plays on gemi\'s main output. On: each channel plays on its own output (Ch 1 to Ch 16) where your DAW uses it.' : null;
+    if (!a) return null;
+    if (/^(prev|next)-/.test(a)) return (a.indexOf('prev') === 0 ? 'Previous' : 'Next') + ' sound.';
+    if (/^pick-(L|ch)-/.test(a)) return 'Choose from all 128 General MIDI sounds.';
+    if (/^ch-\d/.test(a)) return 'Select this channel to preview it on the on-screen keys. Incoming MIDI always plays its own channel.';
+    if (/^mute-/.test(a)) return 'Mute this channel.';
+    if (/^solo-/.test(a)) return 'Solo: hear only soloed channels.';
+    if (/^layer-remove-/.test(a)) return 'Remove this layer. The layers after it move up.';
+    if (/^own-L-/.test(a)) return 'Go back to the sound\'s own envelope.';
+    return { 'layer-add': 'Add a layer. Every key plays all your layers together.', 'combo-prev': 'Previous combo.', 'combo-next': 'Next combo.', 'combo-open': 'Combos keep all your layers and settings together. Browse them here.',
+      'combo-save': 'Save everything as a combo of your own.', 'view-synth': 'Synth: up to three layers played together.', 'view-gm': 'GM Player: 16 channels for General MIDI songs, drums on 10.',
+      theme: 'Switch between light and dark.', menu: 'Theme, window size, help and About.', poly: 'Play chords.', mono: 'One note at a time, with legato.',
+      'gm-reset': 'Sends a General MIDI reset: every channel back to its default.', panic: 'Stops every sound at once.' }[a] || null;
+  }
+  var helpTimer = null, helpEl = null;
+  function hideHelp() { clearTimeout(helpTimer); helpEl = null; var h = $('helptip'); if (h) h.classList.remove('on'); }
+  document.addEventListener('pointerover', function (e) {
+    var el = e.target.closest && e.target.closest('[data-help],[data-act],[data-drag],[data-sw],[data-step]');
+    if (!el || ui.tour || ui.sw.hoverHelp === false || drag) { if (!el) hideHelp(); return; }
+    var text = helpFor(el), key = ctlKey(el) + (el.dataset.help || '');
+    if (!text) { hideHelp(); return; }
+    if (helpEl === key) return;
+    hideHelp(); helpEl = key;
+    helpTimer = setTimeout(function () {
+      var now = [].filter.call(document.querySelectorAll('[data-help],[data-act],[data-drag],[data-sw],[data-step]'), function (x) { return ctlKey(x) + (x.dataset.help || '') === key; })[0];
+      if (!now || helpEl !== key) return;
+      var h = $('helptip'), t = theme();
+      if (!h) { h = document.createElement('div'); h.id = 'helptip'; h.setAttribute('role', 'tooltip'); $('plugin').appendChild(h); }
+      h.textContent = text;
+      h.style.background = t.dark ? 'rgba(20,14,62,0.95)' : 'rgba(51,48,106,0.94)'; h.style.color = '#FFF8F0'; h.style.fontFamily = t.body;
+      h.style.boxShadow = '0 8px 22px rgba(18,10,58,0.35)';
+      var pr = $('plugin').getBoundingClientRect(), k = pr.width / 960, b = now.getBoundingClientRect();
+      var x = (b.left - pr.left) / k + b.width / k / 2, y = (b.bottom - pr.top) / k + 8;
+      h.style.left = '0px'; h.style.top = '0px';
+      var w = h.offsetWidth, hh = h.offsetHeight;
+      if (y + hh > 632) y = (b.top - pr.top) / k - 8 - hh;
+      h.style.left = Math.round(Math.max(8, Math.min(952 - w, x - w / 2))) + 'px'; h.style.top = Math.round(y) + 'px';
+      h.classList.add('on');
+    }, 550);
+  });
+  document.addEventListener('pointerdown', hideHelp, true);
+  document.documentElement.addEventListener('mouseleave', hideHelp);
   document.addEventListener('pointermove', function (e) {
     var over = !!(e.target.closest && e.target.closest('[data-act="layer-add"]')) || !!(ui.tour && TOUR[ui.tour.step].at === 'add');
     var o = tw('tab', 0); if (o.t !== (over ? 1 : 0)) { o.t = over ? 1 : 0; kick(); }
@@ -1380,7 +1487,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
   function unmask(m) { var o = {}; for (var n = 1; n <= 16; n++) o[n] = !!(m & (1 << (n - 1))); return o; }
   function stateSnap() {
     return { view: ui.view, layerProg: ui.layerProg.slice(), gmProg: ui.gmProg.slice(), kit: ui.kit, mute: mask(ui.mute), solo: mask(ui.solo),
-      ch: ui.ch, follow: ui.sw.follow !== false, multiOut: !!ui.sw.multiOut, gmTip: !!ui.gmTip, theme: st.mode, reduceMotion: !!st.reduceMotion, size: ui.size };
+      ch: ui.ch, multiOut: !!ui.sw.multiOut, gmTip: !!ui.gmTip, theme: st.mode, reduceMotion: !!st.reduceMotion, size: ui.size };
   }
   function applyState(v) {
     if (!v) return;
@@ -1391,7 +1498,6 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
     if (v.mute !== undefined) ui.mute = unmask(v.mute);
     if (v.solo !== undefined) ui.solo = unmask(v.solo);
     if (v.ch) ui.ch = v.ch;
-    if (v.follow !== undefined) { ui.sw.follow = !!v.follow; tw('s:follow', 1).t = tw('s:follow', 1).v = v.follow ? 1 : 0; }
     if (v.gmTip !== undefined) ui.gmTip = !!v.gmTip;
     if (v.multiOut !== undefined) { ui.sw.multiOut = !!v.multiOut; tw('s:multiOut', 0).t = tw('s:multiOut', 0).v = v.multiOut ? 1 : 0; }
     if (v.theme) st.mode = v.theme;
@@ -1423,6 +1529,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
       bridge.state = JSON.stringify(stateSnap()); bridge.ready = true;
       ui.tourSeen = !!m.tourSeen;
       if (m.ownEnv) { ui.ownEnv = m.ownEnv; envNotches(); }
+      if (m.hoverHelp === false) { ui.sw.hoverHelp = false; tw('s:hoverHelp', 1).t = tw('s:hoverHelp', 1).v = 0; }
       if (!ui.tourSeen) tourStart();
       render(); return;
     }
@@ -1434,16 +1541,16 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
       var changed = false;
       if (m.voices !== undefined && m.voices !== ui.voices) { ui.voices = m.voices; changed = true; }
       if (m.act && m.act.join() !== ui.chActive.join()) { ui.chActive = m.act; changed = true; }
-      if (m.held && m.held.join() !== ui.heldFromHost) { ui.heldFromHost = m.held.join(); applyHeld(m.held); kick(); }
-      if (changed && !animating) render();
+      if (m.held && m.held.join() !== ui.heldFromHost) { ui.heldFromHost = m.held.join(); applyHeld(m.held); kickKeys(); }
+      if (changed) paintActivity();
     }
   }
   if (backend) backend.addEventListener('gemi', onMessage);
 
   /* the on-screen keyboard: press, glide across keys, release */
   var playing = null;
-  function noteOn(n) { if (ui.localHeld.indexOf(n) < 0) ui.localHeld.push(n); send('note', { note: n, on: true, velocity: 100 }); applyHeld((ui.heldFromHost || '').split(',').filter(Boolean).map(Number)); kick(); }
-  function noteOff(n) { ui.localHeld = ui.localHeld.filter(function (x) { return x !== n; }); send('note', { note: n, on: false }); applyHeld((ui.heldFromHost || '').split(',').filter(Boolean).map(Number)); kick(); }
+  function noteOn(n) { if (ui.localHeld.indexOf(n) < 0) ui.localHeld.push(n); send('note', { note: n, on: true, velocity: 100 }); applyHeld((ui.heldFromHost || '').split(',').filter(Boolean).map(Number)); kickKeys(); }
+  function noteOff(n) { ui.localHeld = ui.localHeld.filter(function (x) { return x !== n; }); send('note', { note: n, on: false }); applyHeld((ui.heldFromHost || '').split(',').filter(Boolean).map(Number)); kickKeys(); }
   document.addEventListener('pointerdown', function (e) {
     var k = e.target.closest('[data-key]'); if (!k || e.button !== 0) return;
     e.preventDefault(); playing = +k.dataset.key; noteOn(playing);

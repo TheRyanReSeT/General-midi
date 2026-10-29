@@ -232,15 +232,17 @@ int main (int argc, char** argv)
     rig.set ("chorus", 0.35f);
     rig.run (0.1, { { 0, juce::MidiMessage::noteOff (2, 40) } });
 
-    // Follow keyboard: channel 1 input plays the selected channel.
-    rig.state (R"({"ch":10,"follow":true})");
-    rig.run (0.05, { { 0, juce::MidiMessage::noteOn (1, 38, (juce::uint8) 110) } });
-    check ((p.getActiveChannels() & (1u << 9)) != 0, "GM Player: Follow keyboard sends channel 1 to the selected channel");
-    rig.run (0.3, { { 0, juce::MidiMessage::noteOff (1, 38) } });
-    rig.state (R"({"follow":false})");
+    // The selected channel is only for previewing: MIDI always plays its own channel, the on-screen
+    // keyboard plays the selected one.
+    rig.state (R"({"ch":7})");
     rig.run (0.05, { { 0, juce::MidiMessage::noteOn (1, 60, (juce::uint8) 100) } });
-    check ((p.getActiveChannels() & 1u) != 0, "GM Player: with Follow off, channel 1 plays channel 1");
+    check (p.getActiveChannels() == 1u, "GM Player: channel 1 MIDI plays channel 1 even with channel 7 selected");
     rig.run (0.3, { { 0, juce::MidiMessage::noteOff (1, 60) } });
+    p.queueUiNote (64, 100, true);
+    rig.run (0.05);
+    check (p.getActiveChannels() == (1u << 6), "GM Player: the on-screen keyboard plays the selected channel");
+    p.queueUiNote (64, 0, false);
+    rig.run (0.3);
 
     // ---- GM Player: a channel plays on its own output when the host turns that output on
     {

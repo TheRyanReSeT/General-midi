@@ -240,8 +240,8 @@ void GMSynth::applyMixSettings()
 
     fluid_synth_set_gain (synth, baseGain * gain);
     fluid_synth_set_chorus_group_nr (synth, -1, 3);
-    fluid_synth_set_chorus_group_speed (synth, -1, 0.4);
-    fluid_synth_set_chorus_group_depth (synth, -1, 12.0);
+    fluid_synth_set_chorus_group_speed (synth, -1, 0.3);
+    fluid_synth_set_chorus_group_depth (synth, -1, 5.0);
     applyReverb();
     applyChorus();
 }
@@ -259,7 +259,7 @@ void GMSynth::applyReverb()
 // delay lines, which clicks. Those are set once, in applyMixSettings().
 void GMSynth::applyChorus()
 {
-    fluid_synth_set_chorus_group_level (synth, -1, chorusLevel * 6.0);
+    fluid_synth_set_chorus_group_level (synth, -1, chorusLevel * 2.5);
 }
 
 void GMSynth::setGain (float linearGain)

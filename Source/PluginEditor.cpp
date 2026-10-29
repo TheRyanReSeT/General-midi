@@ -175,6 +175,7 @@ void GemiEditor::sendInit()
     o->setProperty ("state", processor.getUiState());
     o->setProperty ("version", GEMI_DISPLAY_VERSION);
     o->setProperty ("tourSeen", globalSettings().getBoolValue ("tourSeen", false));   // the first-open tutorial
+    o->setProperty ("hoverHelp", globalSettings().getBoolValue ("hoverHelp", true));
     o->setProperty ("ownEnv", processor.getOwnEnvelopes());
     lastProgs = juce::JSON::toString (processor.getUiState()["layerProg"]);
     addPresetList (*o);
@@ -245,6 +246,11 @@ void GemiEditor::handleMessage (const juce::var& m)
     else if (type == "tourSeen")
     {
         globalSettings().setValue ("tourSeen", true);
+        globalSettings().saveIfNeeded();
+    }
+    else if (type == "hoverHelp")
+    {
+        globalSettings().setValue ("hoverHelp", (bool) m["on"]);
         globalSettings().saveIfNeeded();
     }
     else if (type == "gmReset")

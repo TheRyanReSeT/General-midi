@@ -44,8 +44,9 @@ gemi opens in **Synth** mode; the switch in the header flips to **GM Player**.
 - **16 MIDI channels**, multitimbral, channel 10 is drums, like a hardware GM module. Route a
   `.mid` file's parts to their channels in your DAW and pick each channel's sound (or let the
   song's program changes pick it). Instruments are colour coded by GM family.
-- Per-channel **mute and solo**, activity lights, **Follow keyboard** (a controller on channel 1
-  plays the selected channel), **GM Reset** and **All Sound Off**. Drum kits on channel 10.
+- Per-channel **mute and solo**, activity lights, **GM Reset** and **All Sound Off**. Drum kits
+  on channel 10. Every MIDI channel always plays its own sound; clicking a channel selects it for
+  preview on the on-screen keys.
 - Program change, bank select (GS variations), pitch bend, mod wheel, volume, pan, expression,
   sustain, reverb/chorus sends (CC91/CC93), RPNs and GM/GS SysEx resets all work.
 - **Multi-output**: besides the main stereo output, each channel has its own stereo output
@@ -55,7 +56,8 @@ gemi opens in **Synth** mode; the switch in the header flips to **GM Player**.
 
 **Everywhere**: a playable on-screen keyboard that also lights up with incoming notes; light
 (Cloud Meadow) and dark (Starfield Dusk) themes; window sizes 75 to 150 %; Reduce motion; About;
-a short tutorial on first open (again any time from the gemi menu).
+a short tutorial on first open (again any time from the gemi menu); hover help on every control
+(can be switched off in the gemi menu).
 
 ## How it works
 

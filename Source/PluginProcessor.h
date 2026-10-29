@@ -54,7 +54,7 @@ public:
     // Message-thread interface used by the editor.
 
     // Plugin state that is not a host parameter: sounds, mode, GM Player settings and UI preferences,
-    // as the JSON-like object the UI sends ({ view, layerProg, gmProg, kit, mute, solo, ch, follow, ... }).
+    // as the JSON-like object the UI sends ({ view, layerProg, gmProg, kit, mute, solo, ch, multiOut, ... }).
     juce::var getUiState() const;
     void setUiState (const juce::var& state);
 
@@ -159,7 +159,6 @@ private:
     std::atomic<int> drumKit { 1 };                        // GS program number, 1-based
     std::atomic<uint32_t> muteMask { 0 }, soloMask { 0 };
     std::atomic<int> selectedChannel { 1 };
-    std::atomic<bool> followKeyboard { true };
     std::atomic<bool> separateOutputs { false };   // GM Player: each channel to its own output
     std::atomic<bool> pendingReset { false }, pendingPanic { false }, programsChanged { false };
     std::atomic<uint32_t> activeChannelMask { 0 };
